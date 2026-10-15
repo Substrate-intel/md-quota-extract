@@ -16,3 +16,9 @@
 - **初始管线**：SKILL.md（11 阶段总纲 + 双源架构）+ references/（pipeline 11 阶段详解 / pitfalls 坑 1-11 / volume_params 61 处替换点地图 / iteration-protocol 迭代协议）+ scripts/（9 脚本参考实现：convert_pdf_to_md → extract_md → parse_items → parse_desc → finalize → cost_check → build_front → smoke_front → gate，保留 lvse 基准值）+ check_volume_params.py（六类混用守卫）；
 - **双源架构**：提取用 nowm 干净源、P1 校验用官方 wm 原版，manifest 同锚两者 sha12 + convert 脚本 sha12；
 - **姊妹关系**：有 Word 源优先 `docx-quota-extract`（token 更低、无转换层误差）；本 skill 用于「只有 PDF」场景。
+
+## v1.2.0 · 2026-10-15 · 爪哥（作者）· 基准卷全过程实录（用户裁定：按 lvse 全过程提炼）
+
+- **新增 `references/walkthrough-lvse.md`**：绿色建筑卷 12 里程碑端到端实录（M0 双源定版→M1 转换层三坑→M2 保真层→M3 子目层行判别→M4 目录双栏重组→M5 落库→M6 核验 H1/P1 坑→**M7 前端假死事故（九门全绿但页面「加载中」，两级根因：契约错配+冒烟只验文件）**→M8 契约映射重写→M9 渲染级冒烟→M10 门控闭环→M11 收官分发），每步带实测验收数字；
+- SKILL.md 增「能加载成功的首页」完成态四条定义（缺一不可；只过门控不冒烟=可复现的坏文件）+ 实战范本入口；
+- 动机：用户指令「按照绿色建筑定额库的结构化全过程到生成结构化定额库提取首页（能加载成功的文件）的全过程去提炼总结」——把真实迭代时序（含事故）作为 skill 主线教学，而非理想化十阶段。
