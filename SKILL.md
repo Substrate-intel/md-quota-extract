@@ -1,7 +1,7 @@
 ---
 name: md-quota-extract
 description: 官方定额 PDF → Markdown → 结构化定额库（SQLite + 前端成果库 + 九门门控）的确定性提取管线。适用于只有官方 PDF（含水印扫描版）、拿不到 Word/docx 源的定额、消耗量标准、计价规范类文档。基准卷：辽宁2024《绿色建筑工程定额》269 页全链验证（487 子目/九门全绿/字节级复现/P1 官方原版取证 487/487）。触发词：PDF 转 markdown、md 定额提取、PDF→md→定额库、无 docx 源定额结构化、绿色建筑式提取、md 源管线。
-version: 1.2.0
+version: 1.3.0
 ---
 
 # md-quota-extract：定额 PDF → md → 结构化库 确定性提取管线
@@ -26,7 +26,7 @@ version: 1.2.0
 3. **确定性复现**：全链产物禁 `generated_at` 类运行时时间；有意变更后门控全绿 → `gate.py --make-manifest` 刷指纹 → 复跑。
 4. **疑点留痕不静默**：差异/残余/跳过全部进 log/DB 留痕表过门控对账，禁静默丢弃。
 5. **前端完成态=渲染级冒烟全绿**：文件产出不算完成（坑 11 血泪）。
-6. **复制改造，禁直接运行**：skill 目录脚本保留基准卷（lvse）参数约 30 处硬编码。新卷开工 = 复制 scripts/ → 按 `references/volume_params.md` 换参 → `check_volume_params.py` 零残留（退出码 0）才开工。
+6. **复制改造，禁直接运行**：skill 目录脚本保留基准卷（lvse）参数约 30 处硬编码。新卷开工 = 复制 scripts/（优先 sz11 结构改进版）→ 换参 → **`preflight_check.py`**（路径/正则/短码/断言四类自检）→ `check_volume_params.py` 零残留 → 才开工。
 
 ## 管线总纲（11 阶段，顺序执行）
 

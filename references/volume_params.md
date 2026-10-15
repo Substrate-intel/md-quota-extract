@@ -35,3 +35,17 @@ python check_volume_params.py <卷工作目录>/scripts
 
 检查项六类：路径/文件名、sha12 锚定、编码与章码正则、数量断言、页码偏移、卷特有文案。
 新卷沉淀出的新检查项形态，须回写本 skill 的 CHECKS 清单（见 iteration-protocol.md）。
+
+## 换参高危补遗（sz11 实证，坑 15——详见 pitfalls）
+
+| 漏网形态 | 实例 | 根治 |
+|---|---|---|
+| 单/双反斜杠 | 映射表写 `r"20-\\d{1,3}"` 双反斜杠，文件里是单反斜杠 `20-\d{1,3}`——**永不命中且不报错** | 换参后跑 `preflight_check.py`（正则对 md 源试命中，0 命中即红） |
+| 目录路径 | 只换文件名不换目录（Downloads/nowm.pdf、上卷 out_md/） | preflight 路径存在性+他卷目录残留检查 |
+| 短码语义 | 章码全码 041101 的前端路由短码是 `[2:]`=**1101**；把 lvse 短码 12001 映射成 sz11 全码 041101 → 冒烟空页假绿 | preflight 短码核对 + smoke 防假绿断言（items 层视图须含首子目编码） |
+
+## 参考实现两代（新卷复制源选择）
+
+- **lvse 版**（skill/scripts/，v1.0-1.2 基准）：lvse 卷验证。
+- **sz11 版**（`sp/quota-extract-sz11/scripts/`，结构改进最新验证）：+水印 Fm0 指令删除、章序归章、双区段条文（总/册说明）、跨行标题合并、防假绿冒烟。**新卷优先复制 sz11 版**（其结构改进回写 skill 参考实现记为待办）。
+- 两版都必须过 `preflight_check.py` → `check_volume_params.py` 才开工。
