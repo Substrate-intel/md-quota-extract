@@ -2,6 +2,13 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.1.0 · 2026-10-15 · 爪哥（作者）· 补成果回流与 metal 悬赏协同协议（用户质询补缺）
+
+- **缺口**：v1.0.0 只设计了 skill 自身迭代回流，未覆盖「提取成果回流全国库 → metal 站悬赏自动核销」的接单者闭环；
+- **新增 `references/contribution.md`**：悬赏接单者 8 步闭环（领悬赏→官方源→提取→自验→fork→PR→审核→自动核销）；PR 内容纪律（db 不入公开仓 PR、官方源永不回流）；维护者侧双仓入库操作（私有仓先推保 webhook 时序、quota-db.js 随进程重启生效、API 应急通道）；
+- **悬赏自动核销口径**（metal 站 quota-bounty.js 已实证）：open→closed（按地区+卷 key 匹配）/ claimed|submitted→verified 待管理员发分；
+- SKILL.md 增「成果回流与悬赏协同」节引用。
+
 ## v1.0.0 · 2026-10-15 · 爪哥（作者）· 初始版本（lvse 基准卷全链验证）
 
 - **来源**：从 docx-quota-extract v1.4.0 的 md_source 变体独立成 skill（用户裁定：把「PDF→Markdown→结构化定额库」链路提炼为独立可分发 skill，覆盖只有官方 PDF、无 Word 源的定额/规范类文档）；

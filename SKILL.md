@@ -1,7 +1,7 @@
 ---
 name: md-quota-extract
 description: 官方定额 PDF → Markdown → 结构化定额库（SQLite + 前端成果库 + 九门门控）的确定性提取管线。适用于只有官方 PDF（含水印扫描版）、拿不到 Word/docx 源的定额、消耗量标准、计价规范类文档。基准卷：辽宁2024《绿色建筑工程定额》269 页全链验证（487 子目/九门全绿/字节级复现/P1 官方原版取证 487/487）。触发词：PDF 转 markdown、md 定额提取、PDF→md→定额库、无 docx 源定额结构化、绿色建筑式提取、md 源管线。
-version: 1.0.0
+version: 1.1.0
 ---
 
 # md-quota-extract：定额 PDF → md → 结构化库 确定性提取管线
@@ -65,3 +65,9 @@ nowm.pdf ──(0) convert_pdf_to_md ──> source.md [页锚 Pn]
 
 预检 → 换参+守卫 → 转换层标定（字号/水印/页码三件）→ 阶段 1-2 自测（单章先验证再放大）→
 阶段 5-10 → 门控闭环 → 交付报告 → 按 `references/iteration-protocol.md` 强制回写本 skill。
+
+## 成果回流与悬赏协同（metal 站接单场景）
+
+提取成果回流全国库（`china-quota-volumes` 双仓）→ webhook 自动协同 → 悬赏自动核销发分，
+接单者 8 步闭环见 `references/contribution.md`。要点：db 不走公开仓 PR（收私有仓+sha256 门禁）、
+官方源永不回流（版权）、九门全绿才有提 PR 资格。
