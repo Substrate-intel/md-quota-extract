@@ -191,3 +191,9 @@
 - **根因**：Python sqlite3.connect() 对不存在路径**默认创建空文件**；手工诊断没走 ro URI。site_db() 无 0 字节防御。
 - **根治**：①诊断一律 `sqlite3.connect('file:...?mode=ro', uri=True)`；②发现空壳立即删除+`git reset` 撤销未推送污染 commit；③sync_remote.py site_db() 可加 `os.path.getsize()>0` 守卫（未实施，留待下卷）。
 - **验证**：私有仓 reset 后重同步，sz01 条目回到 db_docx 正常形态；线上 sz01 items=258 正常。
+
+### 坑 48｜收官回写 ≠ 回流到位——"忘了跑"型缺口只能用守卫脚本防（sz02 实证）
+- **症状**：收官时宣称"回写完成"，核实发现 skill 仓两轮回写（v1.4/v1.5）从未 commit/push、成果未注册 VOLUME_META、双仓未同步、线上未终验——四层缺口全部静默，直到下下卷才暴露。
+- **根因**：回写与回流是**两个动作**（改文件≠commit≠push≠同步≠上线），靠记忆/自觉串联必然漏；pitfalls/CHANGELOG 是文档，文档防不了"忘了跑"。
+- **根治**：`scripts/check_backflow.py <卷key>` 机械化核销四层 11 项（A skill 仓干净已推+版本 tag+本卷入 CHANGELOG；B VOLUME_META 注册；C 权威 db 非空+sha256 门禁+双仓干净已推；D 线上收录+items 一致+book_name 全称），退出码 1=禁止宣称收官；已入 iteration-protocol.md 强制回写清单第 7 项。附带坑 47 ③ site_db() 0 字节守卫已同步落地（sync_remote.py）。
+- **验证**：sz02 实测 10/11 PASS（唯一 FAIL=守卫脚本自身未 commit——被自己抓到，防复发能力实证）；commit 推送后复跑应 11/11。
