@@ -2,6 +2,13 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.7.0 · 2026-10-16 · 爪哥（作者）· xj01 OCR 双源形态卷实战回写
+
+- **新坑 7 条入 pitfalls（坑 51-57）**：51 OCR 双源架构定版（OCR 版=文本源/矢量原版=网格几何源+P1 双源取证口径，官方层仅子目本页有文本时查 code）；52 OCR 伪影四连（竖线剥离/END_UT 粘连双正则/BARE_UT 裸令牌/守卫防误杀真单位）；53 链漏跑事故（忠实层两出口，convert 改后断点续跑必须从 extract_md 起）；54 纯消耗量口径（H1/H2 全 skip+门2 分章编码连续+list_code 空书印事实）；55 中文章码前端契约（itemPrefix 查 meta.code_prefix 表/AMP_SEC 恒等/冒烟路由换码）；56 门7 带表规则拍平重建公式（`；`/`｜` 拍平 vs src_join==text 假 fail）；57 目录 2 字「附录」豁免+编号点保号（clean_leaders ≥2）；
+- **新增 references/walkthrough-xj01.md**：OCR 双源形态端到端实录（选型判据表+M0-M8 九里程碑+验收数字），参考实现 sp/quota-extract-xj01/scripts/；
+- SKILL.md 版本号修正 1.4.0→1.7.0（v1.5.x/v1.6.x 前几轮漏升 frontmatter）；
+- xj01 实测：1755 子目（1-1~10-351 十章连续）/11073 消耗行/目录 483/条文 190，九门全绿+冒烟 27/27+全链二跑字节级复现。
+
 ## v1.6.0 · 2026-10-16 · 爪哥（作者）· sz08 市政第八册路灯工程实战回写
 
 - **新坑 2 条入 pitfalls（坑 49/50）**：49 表头规格档位续行吸收 + 复合单位内嵌空格归一（归一优于白名单硬塞）；50 读库 rwc connect 触碰 SQLite header counter → 门 8 字节漂移（根治=全链只读 URI，Windows 路径转正斜杠）；
