@@ -195,8 +195,12 @@ def main():
                 n_online = v["counts"]["items"]
                 check("D 线上 items 数一致", n_local is None or n_local == n_online,
                       f"online={n_online} local={n_local}", "服务器 kill node 重启（动态注册表随进程生效）")
-                check("D 线上 book_name 全称", "计价依据" in (v.get("book_name") or ""),
-                      v["book_name"][:30], "坑 46：finalize 补纯文本 book_name 后重跑+重同步")
+                # 坑46 全称判据卷自适应：「计价依据」是辽宁书名特有词，不可硬编码
+                # （xj01 新疆卷书名无此词）——判据=含「定额/计价依据」且长度>10 且非 label 降级
+                bn = v.get("book_name") or ""
+                check("D 线上 book_name 全称",
+                      ("定额" in bn or "计价依据" in bn) and len(bn) > 10 and bn != v.get("label"),
+                      bn[:30], "坑 46：finalize 补纯文本 book_name 后重跑+重同步")
         except Exception as e:
             check("D 线上终验", False, f"API 不可达/异常: {e}", "确认服务器在线；维护期可用 --offline")
 

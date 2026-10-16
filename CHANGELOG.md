@@ -2,6 +2,12 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.7.1 · 2026-10-16 · 爪哥（作者）· xj01 回流核销暴露守卫缺陷根治
+
+- check_backflow.py v1.5.2：D 层 book_name 检查不再硬编码辽宁特有词「计价依据」（xj01 书名无此词→假 fail），改通用判据 `("定额" in bn or "计价依据" in bn) and len(bn)>10 and bn!=label`（正则表达式含全称特征 + 与 label 区分，防把短 label 当全称）；
+- xj01 核销实证：传参口径=卷 key（`xj01`）非全目录名；A 层 CHANGELOG 条目匹配 `^## .*{key}` 同步口径；
+- 连带根因：xj01 finalize 补 book_name 纯文本 insert（坑 46 同款缺口复发——新卷 finalize 必须显式插 book_name，不能只依赖 md 元数据透传）。
+
 ## v1.7.0 · 2026-10-16 · 爪哥（作者）· xj01 OCR 双源形态卷实战回写
 
 - **新坑 7 条入 pitfalls（坑 51-57）**：51 OCR 双源架构定版（OCR 版=文本源/矢量原版=网格几何源+P1 双源取证口径，官方层仅子目本页有文本时查 code）；52 OCR 伪影四连（竖线剥离/END_UT 粘连双正则/BARE_UT 裸令牌/守卫防误杀真单位）；53 链漏跑事故（忠实层两出口，convert 改后断点续跑必须从 extract_md 起）；54 纯消耗量口径（H1/H2 全 skip+门2 分章编码连续+list_code 空书印事实）；55 中文章码前端契约（itemPrefix 查 meta.code_prefix 表/AMP_SEC 恒等/冒烟路由换码）；56 门7 带表规则拍平重建公式（`；`/`｜` 拍平 vs src_join==text 假 fail）；57 目录 2 字「附录」豁免+编号点保号（clean_leaders ≥2）；
