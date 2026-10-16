@@ -179,3 +179,15 @@
 - **根因**：坑 38 是单位挂工作内容**续行**尾部（跨行）；本卷是同一段内粘连「…碾压。计量单位:100m2」，趟2 判定 `startswith("工作内容")` 直接 continue 跳过。
 - **根治**：趟2 遇工作内容段先查内嵌 `计量单位[:：]`，命中即取；工作内容段本身被趟1 整段吸收后由落库清洗去尾巴，两趟自洽。
 - **验证**：sz02 unit 零空。
+
+### 坑 46｜book_meta.book_name 必须纯文本，json.dumps 带引号 → 线上书名降级（sz02/az09/sz11/lvse/sz01 五卷实证）
+- **症状**：线上 `/api/quota/volumes` 中 md 源卷 book_name 显示为 label 短名（如「市政工程定额·第二册 道路工程（md源提取）」）而非全称书名；PDF 卷正常。
+- **根因**：站点 quota-db.js 的 bookMeta() **原文读取** book_meta.value；PDF 管线存纯文本，md 管线 finalize 统一 `json.dumps(v)` → 值带双引号，键也压根没写 book_name → 站点回退 label。
+- **根治**：finalize 在 meta 循环后显式纯文本 insert `book_name`（五卷各一行，值=build_front 同源全称书名）。
+- **验证**：线上 13/13 卷书名全称；五卷九门全绿+冒烟 23/23 重跑后行数完全一致（提取层产物零字节变动，仅装配层重建）。
+
+### 坑 47｜诊断 sqlite3.connect() 默认创建 0 字节空 db → 污染回流链（sz01 实证）
+- **症状**：诊断查询后 quota-extract-sz01/out/ 冒出 0 字节 sz01_quota.db；sync_remote.py 的 site_db() 按 `out/*.db 优先` 撞上空壳 → 私有仓 volumes.json 收录 `bytes=0/items=0/kind=table` 垃圾条目（真身是 docx_source/docx_quota.db）。
+- **根因**：Python sqlite3.connect() 对不存在路径**默认创建空文件**；手工诊断没走 ro URI。site_db() 无 0 字节防御。
+- **根治**：①诊断一律 `sqlite3.connect('file:...?mode=ro', uri=True)`；②发现空壳立即删除+`git reset` 撤销未推送污染 commit；③sync_remote.py site_db() 可加 `os.path.getsize()>0` 守卫（未实施，留待下卷）。
+- **验证**：私有仓 reset 后重同步，sz01 条目回到 db_docx 正常形态；线上 sz01 items=258 正常。
