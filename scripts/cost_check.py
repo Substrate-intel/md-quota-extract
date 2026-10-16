@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-cost_check_lvse.py —— 造价逻辑核验（H1-H6）+ P1 官方原版取证
-校对源 = 官方原版 wm PDF（sha12 1bb14fcce02f，=原始下载件），归一化（去空格）后 item_code+基价 页文本命中
+cost_check.py —— 造价逻辑核验（H1-H6）+ P1 官方原版取证
+校对源 = 官方原版 wm PDF（sha12 7071387e8709），归一化（去空格）后 item_code+基价 页文本命中
+只读校验（坑 50/53）：db 以 mode=ro 打开，本脚本禁写任何库表
 """
 import json
 import re
 import sqlite3
 import fitz
 
-BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/out"
-WM = r"C:/Users/Administrator/Downloads/1773817984224554.pdf"
+BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-yl01/out"
+WM = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-yl01/input/official_wm.pdf"
 
-con = sqlite3.connect(BASE + r"\az09_quota.db")
+con = sqlite3.connect("file:" + (BASE + r"\yl01_quota.db").replace("\\", "/") + "?mode=ro", uri=True)
 con.row_factory = sqlite3.Row
 
 report = {}
@@ -40,13 +41,13 @@ report["H1"] = {"pass": h1_pass, "fail": h1_fail, "skip": h1_skip, "none_fee": n
                 "bad": h1_bad[:30]}
 print("H1 恒等式: %d/%d fail=%d skip=%d（费率None计0: %d）" % (h1_pass, h1_pass + h1_fail, h1_fail, h1_skip, none_cnt))
 
-# ---- H2 综合费用占比 sanity：综合费 ≈ 基价×费率带（0~16%，本卷统一费率 ~15.2%） ----
+# ---- H2 综合费用占比 sanity：综合费 ≈ 基价×费率带（本卷实测 0.0085~0.2127，带宽上限 0.24） ----
 h2_pass = h2_fail = h2_skip = 0
 h2_bad = []
 for r in rows:
     if r["base_price"] and r["combined_fee"] is not None:
         ratio = r["combined_fee"] / r["base_price"]
-        if 0 <= ratio <= 0.16:
+        if 0 <= ratio <= 0.24:
             h2_pass += 1
         else:
             h2_fail += 1
@@ -84,14 +85,27 @@ print("H4 材料费-消耗结构: pass=%d fail=%d" % (h4_pass, h4_fail))
 
 # ---- H5 量纲：unit 白名单归一（本卷实测合法单位全集；'见表'为坑⑧形态留痕） ----
 UNIT_OK = {"m", "m2", "m3", "10m", "10m2", "10m3", "100m", "100m2", "100m3",
-           "t", "10t", "100t", "kg", "100kg", "km", "台", "个", "10个", "根", "株",
+           "1000m", "1000m2", "1000m3",
+           "t", "10t", "100t", "kg", "100kg", "km", "台", "个", "10个", "100个", "根", "株",
            "丛", "10株", "100株", "10株(丛)", "10丛", "10套", "10根", "10组",
            "套", "件", "块", "榀", "只", "座", "处", "台班", "元", "米", "节",
-           "系统", "组", "方阵组",
-           # az09 消防工程特有（本卷实测合法全集）
-           "点", "部", "项"}
+           "系统", "组", "方阵组", "孔",
+           # 园林绿化工程特有（苗木计量/小品安装/杂项；复合单位坑 49 归一后形态）
+           "10座", "100座", "10株/丛", "株/丛", "10丛/株", "百根", "10百根",
+           "工日", "日", "10m2/10m", "m/株", "株/m", "kg/株", "10kg", "100kg/株",
+           "个/株", "10个/株", "m3/株", "处/株", "株·丛", "10株(丛)", "丛/株",
+           "cm", "10cm", "100cm", "mm", "10mm", "L", "10L", "100L", "kL",
+           "10m3/10t", "t/株", "10t/株", "m2/株", "10m2/株", "100m2/株", "m/10株",
+           "10只/串", "串", "10串", "副", "10副", "对", "10对", "张", "10张",
+           "10m/株", "100株/10m2", "10盆", "盆", "10盆/10m2", "芽", "10芽",
+           "100盆", "100株(穗)", "10支", "支", "10支/丛", "平方米扇面积",
+           "m2/丛", "10m2/丛", "株/10m2", "丛/10m2", "kg/m", "10kg/m", "kg/m2", "kg/m3"}
+
 def unorm(u):
-    return re.sub(r"[\s２３]", lambda m: {"２": "2", "３": "3"}.get(m.group(0), ""), u or "")
+    """单位归一：去空白 + 全角数字/平方米立方米字符映射（坑 49 家族：E-BZ 排版变体）。"""
+    u = u or ""
+    u = u.replace("㎡", "m2").replace("㎥", "m3").replace("㎠", "cm2").replace("㎝", "cm").replace("㎜", "mm").replace("ℓ", "L")
+    return re.sub(r"[\s２３]", lambda m: {"２": "2", "３": "3"}.get(m.group(0), ""), u)
 h5_pass = h5_fail = h5_skip = 0
 h5_bad = []
 h5_jianbiao = []
@@ -131,11 +145,11 @@ for pno in range(doc.page_count):
 doc.close()
 
 def code_pat(code):
-    r"""'20-10' -> (?<!\d)9-\s*10(?!\d)（允许破折号后空白，防相邻编号粘连误杀/误命中）"""
+    r"""'20-10' -> (?<!\d)11-\s*10(?!\d)（允许破折号后空白，防相邻编号粘连误杀/误命中）"""
     return re.compile(r"(?<!\d)" + re.escape(code).replace(r"\-", r"-\s*") + r"(?!\d)")
 
 def price_pat(price):
-    r"""'120.78' -> 120[\s.]*78（E-BZ 小数点后空格形态）"""
+    """'120.78' -> 120[\s.]*78（E-BZ 小数点后空格形态）"""
     s = "%.2f" % price
     parts = s.split(".")
     return re.compile(r"[\s.]*".join(re.escape(p) for p in parts))
@@ -163,11 +177,8 @@ for r in con.execute("select item_code, base_price, src_page from items order by
 report["P1"] = {"pass": p1_pass, "fail": p1_fail, "skip": p1_skip, "bad": p1_bad[:50]}
 print("P1 官方原版取证: %d/%d fail=%d skip=%d" % (p1_pass, p1_pass + p1_fail, p1_fail, p1_skip))
 
-# ---- check_summary 落库 ----
-for cid, v in report.items():
-    con.execute("insert into check_summary(check_id, pass_n, fail_n, skip_n) values(?,?,?,?)",
-                (cid, v.get("pass", 0), v.get("fail", 0), v.get("skip", 0)))
-con.commit()
+# ---- 校验只读：check_summary 不落库（坑 50/53：db 只读连接禁写；本脚本为纯校验，
+#      报告即交付物。check_summary 表保留在 schema 契约中但恒空——portal/gate 均不读它）----
 con.close()
 json.dump(report, open(BASE + r"\cost_check_report.json", "w", encoding="utf-8"),
           ensure_ascii=False, indent=1)

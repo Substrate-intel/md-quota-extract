@@ -2,6 +2,13 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.8.0 · 2026-10-17 · 爪哥（作者）· sz08 缺陷修复回流 + yl01 园林绿化卷实战回写
+
+- **坑 58/59（sz08 修复，yl01 门 6/门 7 双覆盖验证）**：parse_desc print_page 内联硬编码偏移与 OFFSET 脱钩（整体偏 2 页静默上线）→ 根治为 zone 函数 `print_page_of(page)` 收口 + 门 7 印刷页页脚实测双条件；页脚多位数 E-BZ span 序混乱（"172"读成"2 7 1"）→ 按 span x 坐标排序拼接 + 版面过滤；cost_check 只读化（坑 50 延伸）随卷生效；
+- **坑 60/61（yl01 园林绿化卷新增）**：书印 TOC 节行页码整体偏差（ch3/ch4 +2）→ 前端节点树首节下界改章正文起始页（冒烟 12 孤儿实证根治）；门 6b 页脚实测无页码页口径三分（footer=None skip 留痕 / ≠print 真失配 / ⊆ no_page_print 交叉互证，4 条 skip 零泄漏实证）；
+- **scripts/ 基准升级 az09→yl01**：gate.py（页脚实测+门 6b 三分口径）、parse_desc.py（zone 函数）、cost_check.py（纯只读+园林单位集）；
+- **yl01 收官数字**：四章 0501-0504，889 子目逐章连续（407/136/298/48），toc 160，desc_rules 41，冒烟 27/27，九门全绿+端到端二跑门 8 一致，P1 官方取证 889/889（wm 7071387e8709 / nowm 77350d6d3a2d）；第 15 卷。
+
 ## v1.7.2 · 2026-10-17 · 爪哥（作者）· xj01 回流核销二轮：API 双轨判定根治
 
 - check_backflow.py v1.5.3：git_state 回退路径根治——ls-remote 502 时不再拿本地 origin/main 陈旧引用比（API 通道推送后本地无该 commit 对象，update-ref 必失败、引用永停推送前 sha，xj01 实证三仓全误报未同步），改经 GitHub API 直查远端真实 refs/heads/main 再走 tree 等价判定；_slug/_auth_headers 重构去重复 token 逻辑（原 _remote_tree 内联 credential fill×3）；

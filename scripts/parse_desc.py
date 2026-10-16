@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-parse_desc_lvse.py —— 通用安装第九册消防工程卷 目录层 + 条文层
-（skill 参考实现：保留 az09 卷基准值，换参见 references/volume_params.md；
- 结构沿革 lvse→sz11→az09，az09 含坑39 目录缺章行合成+印页区间归章/附表按节分组挂末章/
- 坑40 附录标记双条件四处通用修复）
-toc：nowm.pdf 目录区（P10-13）双栏重组（x<280 左栏 / >=280 右栏，栏内 y±3 聚类）
-desc_rules：md blocks 条文切片（册说明/章说明/计算规则/附表，每条一记录）
-页码口径：册说明+正文印刷页 = 物理页 - 13（目录引用页码为正文印刷页）
+parse_desc.py —— 园林绿化工程定额卷 目录层 + 条文层
+toc：nowm.pdf 目录区（P10-13）双栏重组（x<280 左栏 / >=280 右栏，栏内 y±6.5 聚类；
+     本卷 4 页全双栏）
+desc_rules：md blocks 条文切片（总说明/章说明/计算规则/附表，每条一记录；本卷无独立册说明）
+页码口径：正文印刷页 = 物理页 - 15（目录引用页码为正文印刷页；章码形态 05xxxx）
 """
 import fitz
 import json
 import re
 
-BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/out"
-NOWM = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/input/nowm.pdf"
-OFFSET = 13
+BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-yl01/out"
+NOWM = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-yl01/input/nowm.pdf"
+OFFSET = 15
 
 # ============================== 一、目录层 ==============================
 doc = fitz.open(NOWM)
@@ -47,7 +45,7 @@ for pno in range(9, 13):  # P10-13
 doc.close()
 
 # 行解析 → sz05 契约字段
-CH_RE = re.compile(r"^第([一二三四五六七八九十]+)章\s*(.*?)\(([0-9]{6})\)\s*$")
+CH_RE = re.compile(r"^第([一二三四五六七八九十]+)章\s*(.*?)\(([0-9]{4,6})\)\s*$")  # 章码 4-6 位（yl01=0501~0504）
 SEC_RE = re.compile(r"^([一二三四五六七八九十]+)、")
 SUB_RE = re.compile(r"^(\d+)\.\s*")
 PG_RE = re.compile(r"^[.…·\s]*\((\d{1,3})\)\s*$")
@@ -61,10 +59,10 @@ n_rows = len(toc_rows)
 while i < n_rows:
     page, raw = toc_rows[i]
     r = raw.strip()
-    # az09 形态：章标题跨行（行A 无章码 + 行B 以 (04xxxx) 结尾）→ 合并，续吞页码行
-    if (not re.search(r"\((?:03\d{4}|\d{1,3})\)\s*$", r)
+    # yl01 形态：章标题跨行（行A 无章码 + 行B 以 (05xxxx) 结尾）→ 合并，续吞页码行
+    if (not re.search(r"\((?:05\d{4}|\d{1,3})\)\s*$", r)
             and i + 1 < n_rows
-            and re.search(r"\(03\d{4}\)\s*$", toc_rows[i + 1][1].strip())):
+            and re.search(r"\(05\d{4}\)\s*$", toc_rows[i + 1][1].strip())):
         r = r + toc_rows[i + 1][1].strip()
         i += 1
         if i + 1 < n_rows:  # 续吞紧跟的纯页码行
@@ -73,7 +71,8 @@ while i < n_rows:
                 r = r + toc_rows[i + 1][1].strip()
                 i += 1
     # 长标题拆行：标题行以省略号结尾且无页码 → 与下一行（纯页码行）合并
-    m_pg = re.match(r"^(.*?)\s*[.…·]{2,}\s*\((\d{1,3})\)\s*$", r)
+    # sz08 实测：单「…」字符点线也存在（TOC P12 子目行 7.），故 {1,}
+    m_pg = re.match(r"^(.*?)\s*[.…·]{1,}\s*\((\d{1,3})\)\s*$", r)
     if not m_pg and i + 1 < n_rows and re.fullmatch(r"[.…·\s]+\(\d{1,3}\)\s*", toc_rows[i + 1][1]):
         nxt = toc_rows[i + 1][1]
         m2 = re.search(r"\((\d{1,3})\)", nxt)
@@ -127,8 +126,7 @@ while i < n_rows:
         level, kind = "说明行", "章说明"
     elif "计算规则" in title:
         level, kind = "规则行", "计算规则"
-    elif title.startswith("附录") or "取定表" in title or "附表" in title \
-            or "含量表" in title or "成套产品" in title:
+    elif title.startswith("附录") or "取定表" in title or "附表" in title:
         level, kind = "附表行", "附表"
     elif SEC_RE.match(title):
         level, kind = "节行", "节"
@@ -145,61 +143,12 @@ while i < n_rows:
                     "print_page": print_page, "pdf_page": pdf_page, "toc_page": page})
     i += 1
 
-# ---- az09 适配（坑39）：目录缺第二章标题行（书印疵，030902 仅正文扉页 P60 有）----
-# 若按 cur_ch_code 顺延，第二章全部下级行（说明/规则/节/子目）错挂第一章 → 前端节点树
-# ch2 无节、ch1 混入 ch2 节。根治：正文章序（保真层 md_index 已正确识别 6 章）+
-# 各章说明起始印刷页 = 扉页物理页 + 2 − OFFSET（扉页/空白页/说明页三页模式，本卷全章一致），
-# 按印刷页区间重归属 chapter_code，并为缺失章合成章行（留痕 raw_line）。
-IDX0 = json.load(open(BASE + r"\md_index.json", encoding="utf-8"))
-body_chs = IDX0["chapters"]                      # 按物理页有序
-ch_sm_print = {c["code"]: c["page"] + 2 - OFFSET for c in body_chs}
-codes_in_order = [c["code"] for c in body_chs]
-no_of = {c["code"]: c["no"] for c in body_chs}
-
-# 1a. 合成缺失章行（目录章码集合缺的正文章）
-toc_codes = set(r["chapter_code"] for r in records if r["level"] == "章行")
-for mc in [c for c in codes_in_order if c not in toc_codes]:
-    first_pp = ch_sm_print[mc]
-    ins = len(records)
-    for ri, r in enumerate(records):
-        if r["print_page"] is not None and r["print_page"] >= first_pp:
-            ins = ri
-            break
-    bc = next(c for c in body_chs if c["code"] == mc)
-    records.insert(ins, {"seq": 0, "id": "TOC-SYN", "level": "章行",
-                         "ref_kind": "章", "chapter_code": mc,
-                         "chapter_no": bc["no"],
-                         "title": "%s%s(%s)" % (bc["no"], bc["title"], mc),
-                         "raw_line": "【合成章行】目录缺本章标题行（书印疵），按正文扉页归位",
-                         "print_page": None, "pdf_page": None, "toc_page": None})
-# 1b. 按印刷页区间重归属 chapter_code（附录行之后归附录=None）
-seen_app = False
-for r in records:
-    if r["level"] == "附录行":
-        seen_app = True
-        continue
-    if r["level"] == "章行" or r["print_page"] is None:
-        continue
-    pp = r["print_page"]
-    cur = None
-    for c in body_chs:
-        if pp >= ch_sm_print[c["code"]]:
-            cur = c["code"]
-        else:
-            break
-    r["chapter_code"] = cur
-    r["chapter_no"] = no_of.get(cur, r["chapter_no"])
-# 1c. 重排 seq/id（合成行插入后保持连续）
-for i, r in enumerate(records, 1):
-    r["seq"] = i
-    r["id"] = "TOC-%04d" % i
-
 from collections import Counter
 lv_cnt = Counter(r["level"] for r in records)
 print("目录行:", len(records), dict(lv_cnt))
 json.dump({"meta": {"source": "nowm.pdf 目录区 P10-13 双栏重组", "offset": OFFSET},
            "rows": records},
-          open(BASE + r"\az09_toc.json", "w", encoding="utf-8"),
+          open(BASE + r"\yl01_toc.json", "w", encoding="utf-8"),
           ensure_ascii=False, indent=1)
 
 # ============================== 二、条文层 ==============================
@@ -211,10 +160,25 @@ desc_rules = []
 did = 0
 
 
+def print_page_of(page):
+    """物理页 → 印刷页（zone 函数驱动，坑 51 根治：禁内联硬编码偏移）。
+    yl01 分区实测（2026-10-17，页脚 8.8pt span 按 x 坐标排序判读）：
+    P1-5 无印刷页码；总说明 P6-9 印=物理−5；目录区 P10-15（含 P14-15 空白页）印=物理−9；
+    正文（含章扉页）P16-342 印=物理−OFFSET(15)。任一 zone 偏移改动只改本函数。"""
+    if not page:
+        return None
+    if page <= 5:
+        return None
+    if page <= 9:
+        return page - 5
+    if page <= 15:
+        return page - 9
+    return page - OFFSET
+
+
 def add_rule(block_type, kind, ch_code, text, page, src_blks):
     global did
     did += 1
-    print_page = page - OFFSET if page and page >= 10 else None
     desc_rules.append({
         "section_id": ("GS-%03d" % did if block_type == "总说明" else
                        "CS-%03d" % did if block_type == "册说明" else
@@ -222,16 +186,14 @@ def add_rule(block_type, kind, ch_code, text, page, src_blks):
                        "JR-%03d" % did if block_type == "计算规则" else "FB-%03d" % did),
         "block_type": block_type, "md_kind": kind, "chapter_code": ch_code,
         "seq": did, "page": page,
-        "print_page": (page - 5 if page and page <= 9 else
-                       page - 9 if page and page <= 13 else
-                       page - 13 if page else None),
+        "print_page": print_page_of(page),
         "text": text, "src_blks": str(src_blks),
     })
 
 
 # 册说明：P10 h2 标题块（目录区的「册　说　明」普通段不带 kind，防误命中）
 in_gs = False
-cur_pre = None  # az09：总说明（P6-9）与册说明（P14-15）双区段
+cur_pre = None  # sz11：总说明（P6-9）与册说明（P14-15）双区段
 buf, zs_buf = [], []
 for b in blocks:
     txt = b["text"].strip() if b["type"] == "para" else ""
@@ -330,50 +292,26 @@ if cur_zone and zone_buf:
                  cur_zone, cur_ch, it["text"], it["page"], it["blks"])
 
 # 附表：附录区材料预算价格取定表（13 表块拍平一条）
-# 附表：附录区按节分组（az09 四张附表各一条记录，挂末章 030906 → 前端 ch6 fb 层可见；
-# sz11 教训：附表 chapter_code=None 时树中任何章的 fb 层都渲染不到，内容静默丢失）
-last_ch = codes_in_order[-1] if codes_in_order else None
-last_ch_page = body_chs[-1]["page"] if body_chs else 0
-in_appendix = False
-cur_fb_title = None
-fb_groups = []          # [(title, page, [blocks])]
+fb_blks = []
+fb_title_page = None
 for b in blocks:
-    if b["type"] == "para":
-        t_raw = b["text"].strip()
-        # 附录标记：① 必须带 # 前缀（convert 的 h1 形态；目录页「附　录」条目是
-        # 无 # 普通 para，曾致全书子目表误入附表——坑40）；② CH_RE 不认「附录」，
-        # 故该行在 extract_md 保留 # 前缀；③ 必须在末章扉页之后（双保险）
-        t_clean = t_raw.lstrip("#").replace(" ", "").replace("　", "")
-        if t_raw.startswith("#") and t_clean == "附录" and b["page"] > last_ch_page:
-            in_appendix = True
-            continue
-    if not in_appendix:
-        continue
-    if b["type"] == "para":
-        t = b["text"].strip().replace("　", "")
-        m_sec = re.match(r"^[一二三四五六七八九十]+、(.+)$", t)
-        if m_sec:
-            cur_fb_title = m_sec.group(1)
-            fb_groups.append({"title": cur_fb_title, "page": b["page"], "blks": []})
-        continue
-    if b["type"] == "table" and fb_groups:
-        fb_groups[-1]["blks"].append(b)
-for g in fb_groups:
-    if not g["blks"]:
-        continue
+    if b["type"] == "table" and b.get("ttype") == "附表":
+        fb_blks.append(b)
+    if b["type"] == "para" and "材料预算价格取定表" in b["text"]:
+        fb_title_page = b["page"]
+if fb_blks:
     cells = []
-    for b in g["blks"]:
+    for b in fb_blks:
         for r in b["rows"]:
             cells.append("｜".join(c for c in r if c))
-    add_rule("附表", "附表", last_ch,
-             "%s（附录）：%s" % (g["title"], " ⁃ ".join(cells)),
-             g["page"], [b["no"] for b in g["blks"]])
+    add_rule("附表", "附表", None, "材料预算价格取定表（附录）：" + " ⁃ ".join(cells),
+             fb_title_page or fb_blks[0]["page"], [b["no"] for b in fb_blks])
 
 bt_cnt = Counter(r["block_type"] for r in desc_rules)
 print("条文层:", len(desc_rules), dict(bt_cnt))
 json.dump({"meta": {"source": "md_extract_full.json 条文切片",
                     "n": len(desc_rules)},
            "rules": desc_rules},
-          open(BASE + r"\az09_desc_rules.json", "w", encoding="utf-8"),
+          open(BASE + r"\yl01_desc_rules.json", "w", encoding="utf-8"),
           ensure_ascii=False, indent=1)
-print("written az09_toc.json / az09_desc_rules.json")
+print("written yl01_toc.json / yl01_desc_rules.json")
