@@ -88,9 +88,18 @@ def _remote_tree(repo, commit_sha):
         return None
     import urllib.request
     try:
+        # 私有仓匿名 404 → 带 git credential token（与 git_api_push.py 同通道）
+        headers = {"User-Agent": "backflow-check", "Accept": "application/vnd.github+json"}
+        r = subprocess.run(["git", "credential", "fill"], cwd=repo,
+                           input="protocol=https\nhost=github.com\n\n",
+                           capture_output=True, timeout=30, text=True)
+        tok = next((l.split("=", 1)[1] for l in r.stdout.splitlines()
+                    if l.startswith("password=")), "")
+        if tok:
+            headers["Authorization"] = f"Bearer {tok}"
         req = urllib.request.Request(
             f"https://api.github.com/repos/{m.group(1)}/git/commits/{commit_sha}",
-            headers={"User-Agent": "backflow-check", "Accept": "application/vnd.github+json"})
+            headers=headers)
         return json.load(urllib.request.urlopen(req, timeout=15)).get("tree", {}).get("sha")
     except Exception:
         return None
