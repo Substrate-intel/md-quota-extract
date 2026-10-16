@@ -60,9 +60,9 @@ def git_state(repo, label):
     _, out, _ = sh(["git", "status", "--porcelain"], cwd=repo)
     clean = not out
     _, local, _ = sh(["git", "rev-parse", "main"], cwd=repo)
-    rc, out2, _ = sh(["git", "ls-remote", "origin", "refs/heads/main"], cwd=repo)
-    if rc == 0 and out2:
-        remote = out2.split()[0]
+    _, out, _ = sh(["git", "ls-remote", "origin", "refs/heads/main"], cwd=repo)
+    if out:
+        remote = out.split()[0]
         if local == remote:
             return clean, True, local, remote, "ls-remote"
         # sha 不等：API 通道双轨 commit（api_push_public 本地无对象）——验证 tree 等价
@@ -71,6 +71,19 @@ def git_state(repo, label):
         if rtree and ltree == rtree:
             return clean, True, local, remote, "ls-remote+tree等价(API双轨)"
         return clean, False, local, remote, "ls-remote"
+    # ls-remote 也 502：经 API 直查远端真实 main sha。
+    # 不能用本地 origin/main 引用——API 通道推送后本地无该 commit 对象，
+    # update-ref 必失败，引用永远陈旧（xj01 实证：本地 ref 停在推送前 sha，
+    # 回退比 ref→误报未同步）。
+    remote = _remote_main(repo)
+    if remote:
+        _, ltree, _ = sh(["git", "rev-parse", "main^{tree}"], cwd=repo)
+        if local == remote:
+            return clean, True, local, remote, "API ref"
+        rtree = _remote_tree(repo, remote)
+        if rtree and ltree == rtree:
+            return clean, True, local, remote, "API ref+tree等价(API双轨)"
+        return clean, False, local, remote, "API ref"
     _, remote, _ = sh(["git", "rev-parse", "origin/main"], cwd=repo)
     if local == remote:
         return clean, True, local, remote, "origin/main"
@@ -81,25 +94,54 @@ def git_state(repo, label):
     return clean, False, local, remote, "origin/main(回退)"
 
 
-def _remote_tree(repo, commit_sha):
-    """经 GitHub API 取远端 commit 的 tree sha（tree 等价降级判定用）"""
-    m = re.search(r"github\.com[/:]([^/]+/[^.]+)", repo and sh(["git", "remote", "get-url", "origin"], cwd=repo)[1] or "")
-    if not m:
-        return None
-    import urllib.request
+def _slug(repo):
+    m = re.search(r"github\.com[/:]([^/]+/[^.]+?)(?:\.git)?/?$",
+                  sh(["git", "remote", "get-url", "origin"], cwd=repo)[1])
+    return m.group(1) if m else None
+
+
+def _auth_headers():
+    headers = {"User-Agent": "backflow-check", "Accept": "application/vnd.github+json"}
     try:
-        # 私有仓匿名 404 → 带 git credential token（与 git_api_push.py 同通道）
-        headers = {"User-Agent": "backflow-check", "Accept": "application/vnd.github+json"}
-        r = subprocess.run(["git", "credential", "fill"], cwd=repo,
+        r = subprocess.run(["git", "credential", "fill"],
                            input="protocol=https\nhost=github.com\n\n",
                            capture_output=True, timeout=30, text=True)
         tok = next((l.split("=", 1)[1] for l in r.stdout.splitlines()
                     if l.startswith("password=")), "")
         if tok:
             headers["Authorization"] = f"Bearer {tok}"
+    except Exception:
+        pass
+    return headers
+
+
+def _remote_main(repo):
+    """经 GitHub API 查远端真实 main sha（ls-remote 502 时的替代通道）"""
+    slug = _slug(repo)
+    if not slug:
+        return None
+    try:
+        import urllib.request
         req = urllib.request.Request(
-            f"https://api.github.com/repos/{m.group(1)}/git/commits/{commit_sha}",
-            headers=headers)
+            f"https://api.github.com/repos/{slug}/git/refs/heads/main",
+            headers=_auth_headers())
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.load(resp).get("object", {}).get("sha")
+    except Exception:
+        return None
+
+
+def _remote_tree(repo, commit_sha):
+    """经 GitHub API 取远端 commit 的 tree sha（tree 等价降级判定用）"""
+    slug = _slug(repo)
+    if not slug:
+        return None
+    import urllib.request
+    try:
+        # 私有仓匿名 404 → 带 git credential token（与 git_api_push.py 同通道）
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{slug}/git/commits/{commit_sha}",
+            headers=_auth_headers())
         return json.load(urllib.request.urlopen(req, timeout=15)).get("tree", {}).get("sha")
     except Exception:
         return None

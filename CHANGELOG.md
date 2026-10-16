@@ -2,6 +2,12 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.7.2 · 2026-10-17 · 爪哥（作者）· xj01 回流核销二轮：API 双轨判定根治
+
+- check_backflow.py v1.5.3：git_state 回退路径根治——ls-remote 502 时不再拿本地 origin/main 陈旧引用比（API 通道推送后本地无该 commit 对象，update-ref 必失败、引用永停推送前 sha，xj01 实证三仓全误报未同步），改经 GitHub API 直查远端真实 refs/heads/main 再走 tree 等价判定；_slug/_auth_headers 重构去重复 token 逻辑（原 _remote_tree 内联 credential fill×3）；
+- xj01 核销实证：7/9 PASS（B/C/A-tag/A-changelog + 双仓 tree 等价全过），残留 2 缺口=D 层线上 kill node（用户侧服务器动作）；
+- 连带的 sp/git_api_push.py 根治（同轮）：blob 上传改 `git cat-file blob` git 归一化内容（Windows autocrlf 下工作区 CRLF≠仓库 LF blob，直接读工作区上传导致远端 tree 与本地链分叉——skill 仓 81 行全 CRLF 实证），上传后断言 bsha==oid 否则熔断；commit 带本地 author/committer/date（ISO 原样）消息 %B；新增 --force 重设远端链到本地权威。
+
 ## v1.7.1 · 2026-10-16 · 爪哥（作者）· xj01 回流核销暴露守卫缺陷根治
 
 - check_backflow.py v1.5.2：D 层 book_name 检查不再硬编码辽宁特有词「计价依据」（xj01 书名无此词→假 fail），改通用判据 `("定额" in bn or "计价依据" in bn) and len(bn)>10 and bn!=label`（正则表达式含全称特征 + 与 label 区分，防把短 label 当全称）；
