@@ -197,3 +197,16 @@
 - **根因**：回写与回流是**两个动作**（改文件≠commit≠push≠同步≠上线），靠记忆/自觉串联必然漏；pitfalls/CHANGELOG 是文档，文档防不了"忘了跑"。
 - **根治**：`scripts/check_backflow.py <卷key>` 机械化核销四层 11 项（A skill 仓干净已推+版本 tag+本卷入 CHANGELOG；B VOLUME_META 注册；C 权威 db 非空+sha256 门禁+双仓干净已推；D 线上收录+items 一致+book_name 全称），退出码 1=禁止宣称收官；已入 iteration-protocol.md 强制回写清单第 7 项。附带坑 47 ③ site_db() 0 字节守卫已同步落地（sync_remote.py）。
 - **验证**：sz02 实测 10/11 PASS（唯一 FAIL=守卫脚本自身未 commit——被自己抓到，防复发能力实证）；commit 推送后复跑应 11/11。
+
+### 坑 49｜表头规格档位续行 + 复合单位内嵌空格（sz08 实证）
+- **症状A**：1 条「未分类行」issue——「|  |  |  | 1~2 根 | 每增一根 | … |」位于「项 目」行（跨列合并格）与「基 价」行之间，是表头档位续行，无费用无编号。
+- **根治A**：parse_items 未分类 fallback 前加表头区吸收——`not fee_rows.get("base") and 行首两列全空` → skip（基价行出现后同形态行仍留痕，不掩盖真异常）。
+- **症状B**：H5 量纲 36 fail——'10 只'、'1km/ 单线'、'10 个/ 单项'（E-BZ 西文字体空格混入复合单位）。
+- **根治B**：计量单位提取（两个分支）统一 `re.sub(r"\s+", "", ...)` 归一，本卷新单位（10副/10只/10个/单项/1km/单线/个(台)/根(块)/组件）入 UNIT_OK。**归一优于白名单硬塞**。
+- **验证**：sz08 issues=0、H5 493/493、unit 零空。
+
+### 坑 50｜读库 rwc connect 触碰 SQLite header → 门 8 基线指纹漂移（sz08 实证）
+- **症状**：全链二跑门 8 唯一失配 sz08_quota.db，cmp 定位 byte 28（header change counter 区）；finalize 连跑两次字节一致——漂移来自下游。
+- **根因**：cost_check/gate 以默认 rwc 模式 connect 打开 db，特定序列下触碰 header 计数字段 → 字节漂移。finalize 输出本身确定。
+- **根治**：**所有读库一律 `sqlite3.connect("file:"+path.replace("\\","/")+"?mode=ro", uri=True)`**（坑 47 只读纪律延伸到门 8 场景；Windows 路径必须转正斜杠进 file URI）。仅 finalize（写库方）保留 rwc。
+- **验证**：sz08 双链跑门 8 一致（10 产物含 db）。
