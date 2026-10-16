@@ -53,12 +53,47 @@ def check(name, ok, detail, fix):
 
 
 def git_state(repo, label):
-    """返回 (clean, synced_with_origin)"""
+    """返回 (clean, synced, local, remote, mode)
+    synced 判定优先 ls-remote 网络实查（API 通道推送成功但本地 origin/main
+    引用不前移——api_push_public.py 已知特性，rev-parse 会误报）；网络失败
+    才回退 origin/main 并注明。"""
     _, out, _ = sh(["git", "status", "--porcelain"], cwd=repo)
     clean = not out
     _, local, _ = sh(["git", "rev-parse", "main"], cwd=repo)
+    rc, out2, _ = sh(["git", "ls-remote", "origin", "refs/heads/main"], cwd=repo)
+    if rc == 0 and out2:
+        remote = out2.split()[0]
+        if local == remote:
+            return clean, True, local, remote, "ls-remote"
+        # sha 不等：API 通道双轨 commit（api_push_public 本地无对象）——验证 tree 等价
+        _, ltree, _ = sh(["git", "rev-parse", "main^{tree}"], cwd=repo)
+        rtree = _remote_tree(repo, remote)
+        if rtree and ltree == rtree:
+            return clean, True, local, remote, "ls-remote+tree等价(API双轨)"
+        return clean, False, local, remote, "ls-remote"
     _, remote, _ = sh(["git", "rev-parse", "origin/main"], cwd=repo)
-    return clean, local == remote, local, remote
+    if local == remote:
+        return clean, True, local, remote, "origin/main"
+    _, ltree, _ = sh(["git", "rev-parse", "main^{tree}"], cwd=repo)
+    rtree = _remote_tree(repo, remote)
+    if rtree and ltree == rtree:
+        return clean, True, local, remote, "origin/main+tree等价(API双轨)"
+    return clean, False, local, remote, "origin/main(回退)"
+
+
+def _remote_tree(repo, commit_sha):
+    """经 GitHub API 取远端 commit 的 tree sha（tree 等价降级判定用）"""
+    m = re.search(r"github\.com[/:]([^/]+/[^.]+)", repo and sh(["git", "remote", "get-url", "origin"], cwd=repo)[1] or "")
+    if not m:
+        return None
+    import urllib.request
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{m.group(1)}/git/commits/{commit_sha}",
+            headers={"User-Agent": "backflow-check", "Accept": "application/vnd.github+json"})
+        return json.load(urllib.request.urlopen(req, timeout=15)).get("tree", {}).get("sha")
+    except Exception:
+        return None
 
 
 def main():
@@ -103,15 +138,15 @@ def main():
               "重跑 sync_remote.py 刷新注册表指纹")
         # 双仓 git 干净且已推
         for repo, label in ((REPO_DATA, "私有仓"), (REPO, "公开仓")):
-            clean, synced, local, remote = git_state(repo, label)
+            clean, synced, local, remote, mode = git_state(repo, label)
             check(f"C {label} git 干净已推", clean and synced,
-                  f"clean={clean} local==origin/main={synced} ({local[:8]})",
+                  f"clean={clean} synced={synced}（{mode}）local={local[:8]} remote={remote[:8]}",
                   "重跑 sync_remote.py；git 502 时走 api_push_public.py [repo] [owner/repo]")
 
     # ---- A. skill 仓（回写到位）----
-    clean, synced, local, remote = git_state(os.path.abspath(SKILL), "skill仓")
+    clean, synced, local, remote, mode = git_state(os.path.abspath(SKILL), "skill仓")
     check("A skill 仓 git 干净已推", clean and synced,
-          f"clean={clean} local==origin/main={synced} ({local[:8]})",
+          f"clean={clean} synced={synced}（{mode}）local={local[:8]} remote={remote[:8]}",
           "git add -A && git commit && git tag vX.Y.Z && git push --tags")
     # 最新 CHANGELOG 版本必须有 tag（防"改了文件没打版"）
     ch = open(os.path.join(SKILL, "CHANGELOG.md"), encoding="utf-8").read()
