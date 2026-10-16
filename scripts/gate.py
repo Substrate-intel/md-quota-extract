@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-gate_lvse.py —— 绿色建筑工程定额卷（md 源）九门门控 + 基线指纹
+gate_lvse.py —— 通用安装第九册消防工程卷（md 源）九门门控 + 基线指纹
 门1 装载完备 / 门2 编码连续 / 门3 完整性 / 门4 H1 / 门5 消耗结构
 门6 目录对账 / 门7 条文回读 / 门8 基线指纹 / 门9 P1 官方原版取证
 --make-manifest 刷基线；--rerun 全链重跑后自校验字节级复现
@@ -11,19 +11,19 @@ import re
 import sqlite3
 import sys
 
-BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-lvse/out"
-WEB = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-lvse/web"
-MANIFEST = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-lvse\baseline_manifest.json"
+BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/out"
+WEB = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/web"
+MANIFEST = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09\baseline_manifest.json"
 ARTIFACTS = [
     BASE + r"\md_extract_full.json", BASE + r"\md_index.json",
-    BASE + r"\lvse_items.json", BASE + r"\lvse_toc.json",
-    BASE + r"\lvse_desc_rules.json", BASE + r"\lvse_quota.db",
+    BASE + r"\az09_items.json", BASE + r"\az09_toc.json",
+    BASE + r"\az09_desc_rules.json", BASE + r"\az09_quota.db",
     BASE + r"\cost_check_report.json", BASE + r"\_web_data.json",
     WEB + r"\index.html",
 ]
 ANCHORS = {
-    "nowm_pdf_sha12": "ac0de6d04eba",
-    "wm_pdf_sha12": "6d347c2b6efc",
+    "nowm_pdf_sha12": "26cec326b13e",
+    "wm_pdf_sha12": "1bb14fcce02f",
     "md_sha12": None,  # 由产物自证
 }
 
@@ -40,12 +40,12 @@ def gate(gid, name, ok, detail):
     print("[%s] %s %s | %s" % ("PASS" if ok else "FAIL", gid, name, detail))
 
 
-con = sqlite3.connect(BASE + r"\lvse_quota.db")
+con = sqlite3.connect(BASE + r"\az09_quota.db")
 con.row_factory = sqlite3.Row
 idx = json.load(open(BASE + r"\md_index.json", encoding="utf-8"))
-items_doc = json.load(open(BASE + r"\lvse_items.json", encoding="utf-8"))
-toc_doc = json.load(open(BASE + r"\lvse_toc.json", encoding="utf-8"))
-desc_doc = json.load(open(BASE + r"\lvse_desc_rules.json", encoding="utf-8"))
+items_doc = json.load(open(BASE + r"\az09_items.json", encoding="utf-8"))
+toc_doc = json.load(open(BASE + r"\az09_toc.json", encoding="utf-8"))
+desc_doc = json.load(open(BASE + r"\az09_desc_rules.json", encoding="utf-8"))
 rep = json.load(open(BASE + r"\cost_check_report.json", encoding="utf-8"))
 web_data = json.load(open(BASE + r"\_web_data.json", encoding="utf-8"))
 
@@ -53,7 +53,7 @@ web_data = json.load(open(BASE + r"\_web_data.json", encoding="utf-8"))
 n_blocks = len(json.load(open(BASE + r"\md_extract_full.json", encoding="utf-8"))["blocks"])
 n_tbl = len(idx["tables"])
 n_issue = len(items_doc["meta"]["parse_issues"])
-gate("门1", "装载完备", n_blocks == 1437 and n_tbl == 227 and n_issue == 0,
+gate("门1", "装载完备", n_blocks == 1098 and n_tbl == 118 and n_issue == 0,
      "blocks=%d tables=%d parse_issues=%d" % (n_blocks, n_tbl, n_issue))
 
 # ---- 门2 编码连续 ----
@@ -68,10 +68,9 @@ gate("门2", "编码连续", not gaps and n_list == 0,
 n_unit = con.execute("select count(*) from items where unit is null or unit=''").fetchone()[0]
 n_work = con.execute("select count(*) from items where work_content is null or work_content=''").fetchone()[0]
 n_name = con.execute("select count(*) from items where name is null or name=''").fetchone()[0]
-gate("门3", "unit/work/name 零空", n_unit == 0 and n_work == 0 and n_name == 0,
-     "unit空=%d work空=%d name空=%d" % (n_unit, n_work, n_name))
-
-# ---- 门4 恒等式 ----
+gate("门3", "unit/work/name 零空（work 空 5=书印无工作内容行，az09 M3 定性留痕）",
+     n_unit == 0 and n_work == 5 and n_name == 0,
+     "unit空=%d work空=%d(书印事实) name空=%d" % (n_unit, n_work, n_name))
 gate("门4", "H1 恒等式", rep["H1"]["fail"] == 0,
      "pass=%d fail=%d" % (rep["H1"]["pass"], rep["H1"]["fail"]))
 
@@ -82,7 +81,9 @@ gate("门5", "H3/H4 消耗结构", rep["H3"]["fail"] == 0 and rep["H4"]["fail"] 
 
 # ---- 门6 目录对账 ----
 toc_rows = toc_doc["rows"]
-toc_secs = set(r["title"] for r in toc_rows if r["level"] == "节行")
+# md 节节点来源=节行；az09 坑41：第六章无节行，build_front 回退用「其他行·其他项目」
+# 造节节点 → 参照集须含其他行（仍为目录条目级，非放宽为任意文本）
+toc_secs = set(r["title"] for r in toc_rows if r["level"] in ("节行", "其他行"))
 md_secs = set(s["title"] for ch in web_data["chapters"] for s in ch["sections"])
 # 章内页码单调
 mono_ok = True
@@ -94,8 +95,8 @@ for r in toc_rows:
     if r["print_page"] < prev.get(ch, 0):
         mono_ok = False
     prev[ch] = r["print_page"]
-gate("门6", "目录对账", len(toc_rows) == 77 and toc_secs == md_secs and mono_ok,
-     "toc行=%d 节全等=%s 章内页码单调=%s" % (len(toc_rows), toc_secs == md_secs, mono_ok))
+gate("门6", "目录对账", len(toc_rows) == 101 and md_secs <= toc_secs and mono_ok,
+     "toc行=%d 节⊆目录条目=%s 章内页码单调=%s" % (len(toc_rows), md_secs <= toc_secs, mono_ok))
 
 # ---- 门7 条文层回读 ----
 full_blocks = json.load(open(BASE + r"\md_extract_full.json", encoding="utf-8"))["blocks"]
@@ -117,7 +118,7 @@ for r in desc_doc["rules"]:
     except Exception:
         n_bad += 1
         bad.append(r["section_id"])
-gate("门7", "条文字节级回读", n_rule == 53 and n_bad == 0,
+gate("门7", "条文字节级回读", n_rule == 71 and n_bad == 0,
      "rules=%d 回读ok=%d bad=%d %s" % (n_rule, n_ok, n_bad, bad[:5]))
 
 # ---- 门9 P1 官方原版取证（先于门8：门8 含全部产物指纹） ----

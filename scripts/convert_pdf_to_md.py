@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-绿色建筑工程定额（辽宁2024）PDF -> Markdown（裸 fitz 链）
+通用安装第九册消防工程（辽宁2024）PDF -> Markdown（裸 fitz 链）
 - 页眉/页码行剥离
 - 19.7pt 黑体连续行 -> # 章标题；13.7pt 黑体短行 -> ## 节标题
 - 10.3pt 宋体 -> 正文段落
@@ -11,8 +11,8 @@ import re
 import sys
 import time
 
-SRC = r"C:/Users/Administrator/Downloads/1773816825515128_nowm.pdf"  # 无水印干净源
-DST = r"C:/Users/Administrator/WorkBuddy/sp/out_md/绿色建筑工程定额_辽宁2024_1773816825515128.md"
+SRC = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/input/nowm.pdf"  # 无水印干净源（Fm0 指令级去水印，remove_watermark_az09.py 产）
+DST = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/out/通用安装第九册_消防工程_辽宁2024.md"
 
 HEADER_TEXT = "2024年《辽宁省建设工程计价依据》"
 PAGE_NO_RE = re.compile(r"^[\s·•．.]*\d{1,3}[\s·•．.]*$")
@@ -94,10 +94,25 @@ for pno in range(doc.page_count):
 
     out.append(f"\n<!-- P{pno + 1} -->\n")
 
-    # ---- 按 y 排序输出：文本块与表格交错 ----
+    # ---- 按视觉行聚类排序：文本块与表格交错 ----
+    # 坑37（az09 实证）：同一视觉行的左右分块（左段 y0 与右段 y0 差 ~1.1pt）若纯按 y
+    # 排序，右段（续行/单位行）会被插到左段与下一行之间，阅读顺序颠倒
+    # （P26 实证：「…水压试验、水」/「计量单位:10m」/「冲洗。」→work 截断+单位丢失）。
+    # 根治：y 差 ≤3pt 视为同一视觉行聚簇，簇内按 x 排序；正常行距 ≥10pt 不受影响。
     elems = [("text", y0, x0, l, txt) for (y0, x0, l, txt) in text_items]
     elems += [("table", t.bbox[1], t.bbox[0], t, None) for t in tables]
-    elems.sort(key=lambda e: (e[1], e[2]))
+    elems.sort(key=lambda e: e[1])          # 先按 y 稳定排序
+    clusters, cur, prev_y = [], [], None
+    for e in elems:
+        if prev_y is None or e[1] - prev_y <= 3.0:
+            cur.append(e)
+        else:
+            clusters.append(cur)
+            cur = [e]
+        prev_y = e[1]
+    if cur:
+        clusters.append(cur)
+    elems = [e for c in clusters for e in sorted(c, key=lambda e: e[2])]  # 簇内按 x
 
     for kind, y0, x0, obj, txt in elems:
         if kind == "table":

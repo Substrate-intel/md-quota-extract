@@ -7,14 +7,14 @@ import json
 import os
 import sqlite3
 
-BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-lvse/out"
-DB = BASE + r"\lvse_quota.db"
+BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/out"
+DB = BASE + r"\az09_quota.db"
 if os.path.exists(DB):
     os.remove(DB)
 
-items_doc = json.load(open(BASE + r"\lvse_items.json", encoding="utf-8"))
-toc_doc = json.load(open(BASE + r"\lvse_toc.json", encoding="utf-8"))
-desc_doc = json.load(open(BASE + r"\lvse_desc_rules.json", encoding="utf-8"))
+items_doc = json.load(open(BASE + r"\az09_items.json", encoding="utf-8"))
+toc_doc = json.load(open(BASE + r"\az09_toc.json", encoding="utf-8"))
+desc_doc = json.load(open(BASE + r"\az09_desc_rules.json", encoding="utf-8"))
 idx_doc = json.load(open(BASE + r"\md_index.json", encoding="utf-8"))
 
 con = sqlite3.connect(DB)
@@ -82,4 +82,4 @@ for t in ("items", "item_labors", "item_materials", "item_machines", "toc",
           "desc_rules", "desc_md_extra"):
     print(t, con.execute("select count(*) from %s" % t).fetchone()[0])
 con.close()
-print("written lvse_quota.db")
+print("written az09_quota.db")

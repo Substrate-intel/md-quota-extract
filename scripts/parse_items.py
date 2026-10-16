@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-parse_items_lvse.py —— 绿色建筑工程定额卷 子目解析（md 源）
+parse_items_lvse.py —— 通用安装第九册消防工程卷 子目解析（md 源）
+（skill 参考实现：保留 az09 卷基准值，换参见 references/volume_params.md；
+ 结构沿革 lvse→sz11→az09，az09 含坑36 窄表编码/坑38 单位挂续行/视觉行空格剔除三处通用修复）
 对标 sz05 docx 版 parse_items.py，三处 md 源适配：
 1. 消耗行分类链式继承（docx 网格纵向合并=重复值；md 合并格=首行值后续空）
 2. 名称/规格行按列取值（统一"跨列合并格"与"每列独立名"双形态）
@@ -10,13 +12,13 @@ import json
 import re
 from collections import Counter
 
-BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-lvse/out"
+BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/out"
 FULL = json.load(open(BASE + r"\md_extract_full.json", encoding="utf-8"))
 IDX = json.load(open(BASE + r"\md_index.json", encoding="utf-8"))
 
-CODE_RE = re.compile(r"^20-\d{1,3}$")
+CODE_RE = re.compile(r"^9-\d{1,3}$")
 LIST_RE = re.compile(r"^\d{6}$")
-SEC_RE = re.compile(r"^[一二三四五六七八九十\d]+\s*[、.]")
+SEC_RE = re.compile(r"^[一二三四五六七八九十]+\s*[、.]")  # az09：仅中文序号=节标题边界；阿拉伯「N. 」=子目名行（名称行），不 break
 
 
 def norm_num(s):
@@ -101,6 +103,13 @@ for t in IDX["tables"]:
             code_row_i = ri
             break
     if code_row_i is None:
+        # az09 窄表形态（坑36）：单/双子目表仅 2-3 列，编码在 r[1]（9-286 措施项目表实证），
+        # r[3:] 为空 → 宽表搜索漏判。回退只扫 r[1]（清单编号/项目行不会匹配 9-N 全码形态）
+        for ri, r in enumerate(rows):
+            if len(r) > 1 and CODE_RE.match(cellname(r[1])):
+                code_row_i = ri
+                break
+    if code_row_i is None:
         issues.append({"tbl": t["no"], "issue": "无定额编号行"})
         continue
     cr = rows[code_row_i]
@@ -163,7 +172,9 @@ for t in IDX["tables"]:
             if not txt or txt.startswith("续前"):
                 k -= 1
                 continue
-            if txt.startswith("计量单位"):
+            if "计量单位" in txt:
+                # az09 形态（坑38）：单位可挂在续行尾部「…接地等。计量单位:台」，
+                # 亦可独立成行「计量单位:10m」——包含即取，取冒号后至行尾
                 mw = re.search(r"计量单位\s*[:：]\s*(.+?)\s*$", txt)
                 if mw:
                     unit = mw.group(1)
@@ -334,6 +345,8 @@ for r in items.values():
     w = _sec_prefix.sub("", w, count=1)
     w = re.sub(r"^工作内容\s*[:：]", "", w)
     w = re.sub(r"计量单位\s*[:：].*$", "", w)
+    # 视觉行拼接残留：CJK 字符间的单个空格（「水压试验、水 冲洗。」→「…水冲洗。」）
+    w = re.sub(r"(?<=[\u4e00-\u9fff]) +(?=[\u4e00-\u9fff])", "", w)
     r["work"] = w.strip()
 
 # ---- 完整性统计 ----
@@ -360,7 +373,7 @@ print("子目解析:", len(items), "| 同前展开:", n_tq)
 print("完整性:", dict(cnt), "| issues:", len(issues))
 print("编号空洞:", gaps if gaps else "无（1-%d 连续）" % max(codes))
 meta = {
-    "source": "md_extract_full.json (绿色建筑工程定额卷)",
+    "source": "md_extract_full.json (通用安装第九册消防工程卷)",
     "n_items": len(items),
     "n_tongqian_expanded": n_tq,
     "integrity": dict(cnt),
@@ -368,6 +381,6 @@ meta = {
     "parse_issues": issues,
 }
 json.dump({"meta": meta, "items": [items[c] for c in order]},
-          open(BASE + r"\lvse_items.json", "w", encoding="utf-8"),
+          open(BASE + r"\az09_items.json", "w", encoding="utf-8"),
           ensure_ascii=False, indent=1)
-print("written lvse_items.json")
+print("written az09_items.json")

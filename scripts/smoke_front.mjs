@@ -64,28 +64,28 @@ check("DATA.sections 非空且 block_type 齐全（v1 崩溃点）", () => {
   if (!DATA.sections.length) throw new Error("sections 空");
   for (const s of DATA.sections) if (!s.block_type) throw new Error("section 无 block_type");
 });
-check("GS_TYPE 判定", () => { if (GS_TYPE !== "册说明") throw new Error("GS_TYPE=" + GS_TYPE); });
+check("GS_TYPE 判定（az09 有总说明）", () => { if (GS_TYPE !== "总说明") throw new Error("GS_TYPE=" + GS_TYPE); });
 check("main 已渲染非加载中（v1 症状）", () => {
   const h = get("#main").innerHTML;
   if (!h || h.includes("加载中")) throw new Error("main 停留在加载中");
 });
-check("章节树 4 章全部进树", () => {
-  if (DATA.chapters.length !== 4) throw new Error("chapters=" + DATA.chapters.length);
+check("章节树 6 章全部进树", () => {
+  if (DATA.chapters.length !== 6) throw new Error("chapters=" + DATA.chapters.length);
   for (const c of DATA.chapters)
     if (c.six_layer_status !== "全六层已放大") throw new Error(c.chapter_code + " 未标记放大");
 });
-check("树 HTML 渲染含 4 章", () => {
+check("树 HTML 渲染含 6 章", () => {
   const t = get("#tree").innerHTML;
   for (const c of DATA.chapters)
     if (!t.includes("ch:" + c.chapter_code)) throw new Error("树缺章 " + c.chapter_code);
 });
-check("487 子目全部有 node_id 归属", () => {
+check("286 子目全部有 node_id 归属", () => {
   const bad = DATA.items.filter(i => !i.node_id);
   if (bad.length) throw new Error(bad.length + " 条无 node_id，如 " + bad[0].item_code);
 });
 check("REVIEW 人工核对清单构建", () => {
   const n = REVIEW.fail.length + REVIEW.unmatched.length + REVIEW.units.length + REVIEW.mids.length;
-  if (n < 16) throw new Error("REVIEW=" + n + "（期望≥16 见表单位）");
+  if (n < 17) throw new Error("REVIEW=" + n + "（期望≥17 见表单位）");
 });
 
 // ---------- 视图路由逐一执行 ----------
@@ -94,19 +94,30 @@ get("#main .chip.on").dataset = { c: "all" };
 const views = [
   ["gs 册说明视图", () => show("gs")],
   ["toc 目录视图", () => show("toc")],
-  ["章视图 ch:012001", () => show("ch:012001")],
-  ["层视图 layer:12001:items（定额子目表）", () => show("layer:12001:items")],
-  ["层视图 layer:12001:sm（章节说明）", () => show("layer:12001:sm")],
-  ["层视图 layer:12001:js（计算规则）", () => show("layer:12001:js")],
-  ["层视图 layer:12004:fb（附表）", () => show("layer:12004:fb")],
+  ["章视图 ch:030901", () => show("ch:030901")],
+  ["层视图 layer:0901:items（定额子目表）", () => show("layer:0901:items")],
+  ["层视图 layer:0901:sm（章节说明）", () => show("layer:0901:sm")],
+  ["层视图 layer:0901:js（计算规则）", () => show("layer:0901:js")],
+  ["层视图 layer:0906:fb（附表）", () => show("layer:0906:fb")],
   ["review 人工核对", () => show("review")],
   ["issues 疑点清单", () => show("issues")],
   ["errata 勘误（空）", () => show("errata")],
   ["price 价格库（空）", () => show("price")],
   ["derive 缺价反推（空）", () => show("derive")],
-  ["item:20-10 子目详情弹窗", () => show("item:20-10")],
+  ["item:9-10 子目详情弹窗", () => show("item:9-10")],
 ];
 for (const [name, fn] of views) check(name, fn);
+// 防假绿：层视图路由必须渲染出真实内容（空页=secCh 短码错配，az09 实证）
+check("层视图非空渲染（items 含 9-1）", () => {
+  show("layer:0901:items");
+  const h = get("#main").innerHTML;
+  if (!h.includes("9-1")) throw new Error("items 层视图未渲染出子目行（假绿）");
+});
+check("gs 视图渲染总说明条文", () => {
+  show("gs");
+  const h = get("#main").innerHTML;
+  if (h.length < 500) throw new Error("gs 视图内容过短（假绿）");
+});
 
 // ---------- 结果 ----------
 const fails = results.filter(r => r[0] === "FAIL");

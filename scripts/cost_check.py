@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 """
 cost_check_lvse.py —— 造价逻辑核验（H1-H6）+ P1 官方原版取证
-校对源 = 官方原版 wm PDF（sha12 6d347c2b6efc），归一化（去空格）后 item_code+基价 页文本命中
+校对源 = 官方原版 wm PDF（sha12 1bb14fcce02f，=原始下载件），归一化（去空格）后 item_code+基价 页文本命中
 """
 import json
 import re
 import sqlite3
 import fitz
 
-BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-lvse/out"
-WM = r"C:/Users/Administrator/Downloads/1773816825515128.pdf"
+BASE = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/out"
+WM = r"C:/Users/Administrator/Downloads/1773817984224554.pdf"
 
-con = sqlite3.connect(BASE + r"\lvse_quota.db")
+con = sqlite3.connect(BASE + r"\az09_quota.db")
 con.row_factory = sqlite3.Row
 
 report = {}
@@ -84,10 +84,12 @@ print("H4 材料费-消耗结构: pass=%d fail=%d" % (h4_pass, h4_fail))
 
 # ---- H5 量纲：unit 白名单归一（本卷实测合法单位全集；'见表'为坑⑧形态留痕） ----
 UNIT_OK = {"m", "m2", "m3", "10m", "10m2", "10m3", "100m", "100m2", "100m3",
-           "t", "10t", "100t", "kg", "100kg", "km", "台", "个", "根", "株",
+           "t", "10t", "100t", "kg", "100kg", "km", "台", "个", "10个", "根", "株",
            "丛", "10株", "100株", "10株(丛)", "10丛", "10套", "10根", "10组",
            "套", "件", "块", "榀", "只", "座", "处", "台班", "元", "米", "节",
-           "系统", "组", "方阵组"}
+           "系统", "组", "方阵组",
+           # az09 消防工程特有（本卷实测合法全集）
+           "点", "部", "项"}
 def unorm(u):
     return re.sub(r"[\s２３]", lambda m: {"２": "2", "３": "3"}.get(m.group(0), ""), u or "")
 h5_pass = h5_fail = h5_skip = 0
@@ -129,11 +131,11 @@ for pno in range(doc.page_count):
 doc.close()
 
 def code_pat(code):
-    r"""'20-10' -> (?<!\d)20-\s*10(?!\d)（允许破折号后空白，防相邻编号粘连误杀/误命中）"""
+    r"""'20-10' -> (?<!\d)9-\s*10(?!\d)（允许破折号后空白，防相邻编号粘连误杀/误命中）"""
     return re.compile(r"(?<!\d)" + re.escape(code).replace(r"\-", r"-\s*") + r"(?!\d)")
 
 def price_pat(price):
-    """'120.78' -> 120[\s.]*78（E-BZ 小数点后空格形态）"""
+    r"""'120.78' -> 120[\s.]*78（E-BZ 小数点后空格形态）"""
     s = "%.2f" % price
     parts = s.split(".")
     return re.compile(r"[\s.]*".join(re.escape(p) for p in parts))

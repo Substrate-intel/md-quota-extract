@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-extract_md.py —— 绿色建筑工程定额卷（辽宁2024）保真层
+extract_md.py —— 通用安装第九册消防工程卷（辽宁2024）保真层
 md 源（由 nowm.pdf 确定性生成，convert_greenbuilding.py）→ blocks JSON
 
 对标 docx 版 docx_extract_full.json / docx_index.json 契约：
@@ -9,21 +9,21 @@ md 源（由 nowm.pdf 确定性生成，convert_greenbuilding.py）→ blocks JS
 确定性：无运行时时间戳；meta 锚定 nowm.pdf sha12 + 官方原版 wm sha12 + convert 脚本 sha12
 
 页码口径（本卷定版）：
-- 正文/附录 P10-269: 印刷页 = 物理页 - 9
-- 目录区 P6-9: 印刷页 = 物理页 - 5
-- P1-5 及章扉页对(12/13,66/67,206/207,226/227,256/257) 无印刷页码
+- 册说明+正文 P14-163: 印刷页 = 物理页 - 13
+- 总说明 P6-9: 印刷页 = 物理页 - 5；目录 P10-13: 印刷页 = 物理页 - 9；通知 P1-2: 印=物理
+- P3-5 及章扉页对(18/19,60/61,80/81,92/93,132/133,146/147) 无印刷页码
 """
 import hashlib
 import json
 import re
 
-MD = r"C:/Users/Administrator/WorkBuddy/sp/out_md/绿色建筑工程定额_辽宁2024_1773816825515128.md"
-NOWM = r"C:/Users/Administrator/Downloads/1773816825515128_nowm.pdf"
-WM = r"C:/Users/Administrator/Downloads/1773816825515128.pdf"       # 官方原版（校对源）
-CONVERT = r"C:/Users/Administrator/WorkBuddy/sp/out_md/convert_greenbuilding.py"
-OUT_DIR = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-lvse/out"
+MD = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/out/通用安装第九册_消防工程_辽宁2024.md"
+NOWM = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/input/nowm.pdf"
+WM = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/input/official_wm.pdf"       # 官方原版（校对源）
+CONVERT = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/scripts/convert_pdf_to_md.py"
+OUT_DIR = r"C:/Users/Administrator/WorkBuddy/sp/quota-extract-az09/out"
 
-CODE_RE = re.compile(r"^20-\d{1,3}$")          # 定额编号
+CODE_RE = re.compile(r"^9-\d{1,3}$")          # 定额编号
 CH_RE = re.compile(r"^#\s+第([一二三四五六七八九十]+)章\s+(.+?)\s*\((\d{6})\)\s*$")
 PAGE_RE = re.compile(r"^<!--\s*P(\d+)\s*-->$")
 
@@ -131,14 +131,14 @@ tables = [{"no": b["tbl_no"], "blk": b["no"], "page": b["page"],
           for b in blocks if b["type"] == "table"]
 
 meta = {
-    "source": "绿色建筑工程定额_辽宁2024 md（nowm.pdf 确定性生成）",
+    "source": "通用安装第九册消防工程_辽宁2024 md（nowm.pdf 确定性生成）",
     "md_sha12": sha12(MD),
     "nowm_pdf_sha12": sha12(NOWM),
     "wm_pdf_sha12": sha12(WM),
     "convert_script_sha12": sha12(CONVERT),
-    "pages": 269,
-    "page_offset": {"main": 9, "toc": 5},
-    "no_page_print": [1, 2, 3, 4, 5, 12, 13, 66, 67, 206, 207, 226, 227, 256, 257],
+    "pages": 163,
+    "page_offset": {"main": 13, "toc": 9},
+    "no_page_print": [3, 4, 5, 18, 19, 60, 61, 80, 81, 92, 93, 132, 133, 146, 147],
     "n_blocks": len(blocks), "n_para": n_para, "n_table": n_table,
 }
 full = {"meta": meta, "blocks": blocks}
