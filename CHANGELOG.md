@@ -2,6 +2,12 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.8.1 · 2026-10-17 · 爪哥（作者）· 悬赏回流自动核销（xj01 实证）
+
+- references/contribution.md 第 8 条口径更新：协同从「claimed/submitted→verified 待人工发分」升级为 **verified→settled 自动发分**（points.earn pool='bounty'，refId=quota-bounty:<id> 幂等，QUOTA_AUTO_SETTLE=off 留人工闸）；
+- 匹配三通道根治（站点 backend/quota-volumes-sync.js）：① targetVol 精确绑卷（最高优先）② 文本双向包含/≥3 字窗口 ③ 关键词实体匹配（专业词≥1 且泛词≥1）；价格册词（价目表/单价册）与消耗量定额卷互斥——根治「建筑专业定额最新版」↔「房屋建筑与装饰消耗量定额」近义书名匹配失效（3 字窗口原口径对近义表述全失效）；
+- xj01 实证：QB-20261013-001 悬赏回流后自动 settled，bounty 池 +2000（ledger refId=quota-bounty:6ace355b…，幂等）；QB-20261017-001（价目表）正确未命中。
+
 ## v1.8.0 · 2026-10-17 · 爪哥（作者）· sz08 缺陷修复回流 + yl01 园林绿化卷实战回写
 
 - **坑 58/59（sz08 修复，yl01 门 6/门 7 双覆盖验证）**：parse_desc print_page 内联硬编码偏移与 OFFSET 脱钩（整体偏 2 页静默上线）→ 根治为 zone 函数 `print_page_of(page)` 收口 + 门 7 印刷页页脚实测双条件；页脚多位数 E-BZ span 序混乱（"172"读成"2 7 1"）→ 按 span x 坐标排序拼接 + 版面过滤；cost_check 只读化（坑 50 延伸）随卷生效；
