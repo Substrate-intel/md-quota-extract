@@ -2,6 +2,13 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.8.2 · 2026-10-17 · 爪哥（作者）· 悬赏自动发分加「交付记录硬门槛」
+
+- 用户裁定：**必须有 QuotaSubmission 交付记录才自动发分**。contribution.md 第 8 条补「交付记录硬门槛」口径与五个原因码；
+- 站点实现（backend/quota-volumes-sync.js）：新增 `deliveryGate(subs, claimBy)` 四判据（bountyId 归属 / account==claimBy / 非 rejected / 有实体凭据），有效者优先取「已过门」；发分三前提（认领人在场 + AUTO_SETTLE 未关 + 交付记录有效），不满足只转 `verified`，原因码进 `verifyNote` 与报告 `settleBlocked`（禁止静默吞掉）；
+- 堵人工口子：`POST /api/quota-bounty/:id/settle` 同口径拦截（自动转 verified 后本可绕过），admin 例外须 `force=true` + `reason` 留痕；
+- 验证：本地桩件端到端单测 31/31（判据表 8 + 匹配回归 6 + 决策表 15）→ 推送 GitHub → 服务器定向拉取（字节级 sha256 一致）→ 重启 → 线上探针：唯一在途悬赏 QB-20261017-001（claimed/0 提交）判定 `BLOCK:no-submission`。
+
 ## v1.8.1 · 2026-10-17 · 爪哥（作者）· 悬赏回流自动核销（xj01 实证）
 
 - references/contribution.md 第 8 条口径更新：协同从「claimed/submitted→verified 待人工发分」升级为 **verified→settled 自动发分**（points.earn pool='bounty'，refId=quota-bounty:<id> 幂等，QUOTA_AUTO_SETTLE=off 留人工闸）；
