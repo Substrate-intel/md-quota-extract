@@ -329,3 +329,13 @@
 - **症状**：目录页 P14 为 2×2 分块版式（左上→右上→左下→右下），split_x 双栏模型输出交错序 → vol/ch 归属 walk 错挂（第十册节挂到第十一册）→ TOC 对账掉 1。
 - **根治**：不猜版式——目录页码**必然非降**（目录的定义）：TOC 行收集后，无页码行（册/章标题）回填后继页码做键，**稳定排序**恢复逻辑阅读序，对任何异常版式免疫。
 - **验证**：xj10 排序后 vol/ch 全部正确，351/351 全对账 unmatched=0。
+
+### 坑 72｜双仓注册表宽 glob 吞卷：REGION_EXCLUDE 必须随新卷同步追加（xj02/03/10 实证，路径劫持+远端误删）
+- **症状**：`sync_remote.py` 的 liaoning-2024 宽 glob `quota-extract*` 把后接入的 xj02/xj03/xj10 全部吞进辽宁桶（仅首家 xj01 显式剔除）→ volumes.json 注册路径被劫持成 `liaoning-2024/quota-extract-xj*`，重跑 sync 还把私有仓 `xinjiang-2020/` 下全部 xj db 误删（远端只剩错误路径副本）；服务器 sha256 门禁看似能过（内容相同），但路径布局与既有部署分叉。
+- **根治**：①新卷接入时**归属非默认地区的必须同步追加 REGION_EXCLUDE**，宽 glob 地区的剔除表要全量枚举；②事故恢复=修 REGION_MAP/EXCLUDE → 重跑 sync 生成「删误增正」计划 → git 闪断走 `git_api_push.py` API 通道恢复 → 本地 `pull --rebase` 对齐后 check_backflow C 层 git 判据才认绿（API 通道 commit sha≠本地字节，比对的是 sha 而非内容）。
+- **验证**：修复后 registry 全 xj 卷路径回到 `xinjiang-2020/`，误推文件在双仓远端均被删除计划清掉，回流核销 11/11。
+
+### 坑 73｜quota 卷书名键名分裂：quota_book_meta 用 title，站点路由取 book_name（线上 book_name 恒=label 降级）
+- **症状**：回流核销 D 层「book_name 全称」判据失败——线上 `/api/quota/volumes` 的 book_name 恒等于注册表 label。根因：`build_db` 写 `quota_book_meta` 键名为 `title`，而 `routes/quota.js` 取 `bm.book_name` → undefined 回落 label。另外 `quota-db.js` 的 `pool[vol]` SQLite 句柄进程级缓存 + VOLUMES 注册表模块加载定格——**服务器换 db/注册表后必须重启 node 进程**，否则线上永远读旧值。
+- **根治**：①站点路由三处兜底 `bm.book_name || bm.title || meta.label`（metal-calculation 远端 48a4a9ca）；②后续 quota 卷 build_db 建议双键同写（title+book_name）；③换 db 后标准动作=taskkill node → 看门狗拉起 → 线上 API 复验 book_name ≠ label。
+- **验证**：xj10 线上 book_name=「新疆维吾尔自治区市政工程消耗量定额（一）（2020版）」≠ label「新疆市政工程消耗量定额（一）（OCR双源）」，回流核销 D 层 PASS。

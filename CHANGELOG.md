@@ -2,6 +2,12 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.9.1 · 2026-10-20 · 爪哥（作者）· xj10 回流核销收官新坑（坑 72-73）
+
+- **坑 72**：双仓注册表宽 glob 吞卷——REGION_EXCLUDE 必须随新卷同步追加（xj02/03/10 路径劫持 liaoning-2024/+私有仓 xinjiang-2020 db 误删；API 通道恢复+pull --rebase 对齐判据）；
+- **坑 73**：quota 卷书名键名分裂（quota_book_meta.title vs 路由 book_name）+ quota-db.js pool 进程级缓存——换 db 必重启 node，路由已三处 bm.title 兜底；
+- xj10 回流核销 check_backflow 四层 11/11 PASS 定版。
+
 ## v1.9.0 · 2026-10-20 · 爪哥（作者）· xj03/xj10 新坑入库（坑 62-71）+ 经验迁移审计纪律
 
 - **坑 62-63（xj03 补录）**：表题 lookahead 延迟归属（注续行 vs 跨页表题同形）；门 7 印页口径必须独立实测、禁 convert_meta 自证循环（xj10 复审坐实自证缺陷后双卷实证入清单）；
