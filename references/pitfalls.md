@@ -339,3 +339,23 @@
 - **症状**：回流核销 D 层「book_name 全称」判据失败——线上 `/api/quota/volumes` 的 book_name 恒等于注册表 label。根因：`build_db` 写 `quota_book_meta` 键名为 `title`，而 `routes/quota.js` 取 `bm.book_name` → undefined 回落 label。另外 `quota-db.js` 的 `pool[vol]` SQLite 句柄进程级缓存 + VOLUMES 注册表模块加载定格——**服务器换 db/注册表后必须重启 node 进程**，否则线上永远读旧值。
 - **根治**：①站点路由三处兜底 `bm.book_name || bm.title || meta.label`（metal-calculation 远端 48a4a9ca）；②后续 quota 卷 build_db 建议双键同写（title+book_name）；③换 db 后标准动作=taskkill node → 看门狗拉起 → 线上 API 复验 book_name ≠ label。
 - **验证**：xj10 线上 book_name=「新疆维吾尔自治区市政工程消耗量定额（一）（2020版）」≠ label「新疆市政工程消耗量定额（一）（OCR双源）」，回流核销 D 层 PASS。
+
+### 坑 74｜parse 前置区跳过边界硬编码迁移：xj10 的 `pno<=23` 到 xj11 静默吞两页（第一章丢 3 节 18 子目）
+- **症状**：xj11（市政二）parse 后 toc=140/192、第一章仅 16/19 节——P22/P23 两页被整页跳过（xj10 前置区边界 `if pno<=23 and kind!="divider": continue` 是 xj10 布局：正文从物 P24 起；xj11 正文从物 P18 起，印页 offset=11）。整页跳过不报错不留痕，只在 TOC 恒等式暴露。同族连带：vol_note_pages 册说明页硬编码、front_items 公告/总说明 pno 硬编码全部失效（册名错、front=[]）。
+- **根治**：①**正文起点数据驱动**：`first_ch_page = 第一个 HDR_CH_RE 匹配 hdr 的页`（`第X章 名 印页` 形态；前置页 hdr 为空或纯页码书名型不匹配）；跳过条件改 `pno < first_ch_page`；②册说明页=按册扉页（VOL_RE 匹配的 divider）分段，段内到首个 HDR_CH 页之前的非 empty 页；③公告/总说明改**全文内容驱动**（P4 公告埋在表格空 cell 之后前 200 字符全是 `|`；P6 标题「总 说 明」带空格须 norm 后匹配；总说明跨页续接）；④`first_ch_page` 找不到直接 SystemExit 禁静默降级。
+- **验证**：xj11 修复后第一章 19/19 节、items 1263→1281、toc 145/145 恒等式、gate 9/9；册说明 2 条（第三册/第四册）、front 2 条（notice+general_note）全部就位。
+
+### 坑 75｜partial 分支 title 未按注释补全为 TOC 全标题（xj10 遗留，xj11 触发即恒等式破）
+- **症状**：parse 节标题分支 partial 命中（TOC 前缀互含：正文「十二、冲击式钻机钻孔」vs TOC「十二、冲击式钻机」），注释写「补全块对齐为 TOC 全标题」但代码 append 的是正文行原文 → toc_check 的 matched 判据是「norm(TOC title) ∈ sections 标题集合」，partial 节恒 unmatched。xj10 因正文与 TOC 全 exact 从未触发，属**休眠 bug 随卷迁移**。
+- **根治**：partial 分支 title 取 toc_titles[(vol,ch)] 中命中的那个 TOC 全标题（cur_sec 同步）；exact 分支不受影响。
+- **验证**：xj11 partial 节 title=「十二、冲击式钻机」后 toc 145/145。
+
+### 坑 76｜ITEM_END_RE 的 `)` 误伤 OCR 多括号节标题（「二、浆砌片(块)石)」）
+- **症状**：正文节标题 OCR 多识别一个右括号（原书即有的排版噪声），ITEM_END_RE `[。；：？！…”"》】)]$` 以 `)` 结尾即判「非节标题」→ partial 被拒 → 节丢失、TOC 缺 1。ITEM_END_RE 本意防规则条文（句号结尾）撞 TOC 短节标题，括号不在语义内。
+- **根治**：ITEM_END_RE 去掉 `)`，只留句号/问号/叹号/引号/书名号类；节标题放行由 toc_match 的 exact/partial + TOC 权威锚保证，规则条文另有 mode（body/explain/rules）与 sec_not_in_toc 留痕双保险。
+- **验证**：xj11「二、浆砌片(块)石)」partial 命中入 sections，第五章 6/6 节，sections=145==TOC 145。
+
+### 坑 77｜【定额查询】OCR twin 带打开密码且站点 DRM 不一致：接入先验 needs_pass
+- **症状**：xj11 用户提供的（二）(OCR).pdf（Downloads/Documents 两副本）均 `needs_pass=1`，fitz/pikepdf/pypdf 三引擎空密码全败（**用户级密码，非 owner-only 权限加密**）→ twin 不可用；而（一）(OCR).pdf 无密码——站点 DRM 不一致，不能假设 twin 恒可用。
+- **根治/流程**：①twin 接入第一动作=验 needs_pass + 几何对齐（rect 逐页比对）+ 零文本页分布对照；②无密码 twin 直接走双源管线；③有密码时用本地产 OCR twin（rapidocr_onnxruntime，不可见文字层回填+坐标 px→pt 72/200 换算，与外部 twin 同构），**但 4 vCPU 小 VM 上并行收益薄**：每页任务重复 init 模型+重开 PDF=18.4s/页（须 Pool initializer 进程级单例），4 进程 onnxruntime 线程超订反而 15.7s/页（monkeypatch SessionOptions 限线程无效，内存带宽瓶颈），2 进程 11.3s/页为实测最优；④拿到 twin 密码后可反哺本地 OCR 精度审计（xj10 已有交叉验证先例）。
+- **验证**：xj11 最终用用户提供的无密码副本（(OCR)(1).pdf sha12=ffe37a296322）走双源，rect 全对齐、P101 内容正确、gate 门7 印页三交叉零违例。
