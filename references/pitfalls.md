@@ -453,3 +453,10 @@
 - **根治**（呈现层，数据层零动）：①`chLabel()` 虚拟章标题与 vol title 相等（空白归一）时显「册主体（N节/M子目）」，附录虚拟章保留本名；②showCh 主标题同判据去重（相等时直渲染册名，否则「第N册 · 标题」）；③`explainLabel(ch)` 按结构分流——虚拟章（no=0/1）显「册说明」，章层卷显「章说明」；rules 桶书名印「工程量计算规则」标题如实保留。smoke 增三断言（册说明呈现/章说明禁现/树节点册名去重）+ 册说明全量断言（第四册 5+12 条原文在窗）。
 - **验证**：xj15 gate 9/9 复跑无回归、smoke 10/10；前端重建 478727B。
 - **同族预警**：与坑89（虚拟章）互为表里——**坑89 解决数据层「章层缺失」，坑94 解决呈现层「章层术语残留」**；结构特化卷（无章层/单册卷）的交付验收必须包含「术语对账」：树标签/区块标题/主标题三处都要按实际结构渲染，禁从章层卷模板直抄。另注意**分流事实核查**：原书 P13 印「说明」P14 印「工程量计算规则」→ 两桶分立是书印事实，忠实层不动，勿「修复」成合并。
+
+### 坑 95｜站点 chapter-rules 单源假设：九表卷章/册说明存 quota_explain，hasTable('desc_rules') 短路致线上恒空（xj10-15 六卷系统性缺口，2026-10-20 xj15 暴露）
+- **症状**：xj15 交付后线上站点子目详情「展开本章说明与计算规则」按钮计数恒 0、点开空白；`/api/quota/xj15/chapter-rules?chapter=4-0` 返回 total=0（甚至 400「该卷无章级条文表」）。而 DB `quota_explain` 里 vol=4 ch_no=0 明明有 17 条。
+- **根因**：站点路由 `routes/quota.js` 对章级条文**单源假设**——只认 `desc_rules` 表（xj01/sz01-11/yl01/az09/lvse 等 OCR 卷的 schema，chapter_code 直连）。xj10-15 走 quota 九表 schema，章/册说明存 `quota_explain(pk=(vol,ch_no), mode=explain|rules)`，无 desc_rules → `hasTable` 判假短路：子目详情 `chapter_rules_count=0`、端点直接 400。**受影响 6 卷**（xj10/11/12/13/14/15），非 xj15 独有。
+- **根治**：路由改**多源适配**（统一对外契约 `{block_type, md_kind, seq, print_page, text}`）：①`chapterRulesCountOf()` 与 `chapterRulesOf()` 依次探测 desc_rules → quota_explain → null；②九表卷 `chapter_code` 形制 `vol-ch_no`（'4-0'/'10-1'）→ `chapterCodeParts()` 正则拆分查 `quota_explain WHERE vol=? AND ch_no=?`；③`mode` 映射 block_type/md_kind，`pno` 映射 print_page，`id` 映射 seq；④无 chapter 参数时返回全卷（xj15=74 条）；⑤no-match 返回 200 空列表（附录虚拟章 12-1 等），仅两表全无才 400。前端按钮文案同步通用化「本章/册说明与计算规则…章/册级通用」。
+- **验证**：本地隔离冒烟 10/10（xj15 17/74 条 + block_type 双形态 + az09 desc_rules 零回归 13/71 条）；线上终验 xj15 B4-1 count=0→17、xj14 8-1-1 count=0→36、az09 9-1=13 不变。
+- **同族预警**：与坑 73（quota_book_meta 键名分裂）、记忆「quota 九表无 item_labors/materials/machines 兼容表→子目详情恒空数组」同族——**站点对两套 schema（辽宁/OCR 卷 vs 新疆九表卷）的兼容层是逐个端点补的，缺一处就静默返回空**。新卷交付验收必须含「站点端点适配清单」：items 详情 / chapter-rules / labors-materials-machines / toc / machines 逐端点实测，禁只看 volumes 列表 available=true。

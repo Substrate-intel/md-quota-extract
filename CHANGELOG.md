@@ -2,6 +2,13 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.9.8 · 2026-10-20 · 爪哥（作者）· 站点 chapter-rules 多源适配，新坑 95（xj10-15 六卷系统性缺口）
+
+- **坑 95（站点级系统性缺口）**：站点 `routes/quota.js` 章级条文单源假设只认 `desc_rules`（OCR 卷 schema）——xj10-15 九表卷章/册说明存 `quota_explain`，`hasTable('desc_rules')` 判假短路致子目详情 `chapter_rules_count=0`、端点 400/空。**影响 6 卷，非 xj15 独有**；线上「展开本章说明」按钮恒 0 条即用户「册说明没交付」的真实来源。
+- **根治**：路由多源适配（统一契约 block_type/md_kind/seq/print_page/text）——desc_rules → quota_explain 依次探测；九表卷 `chapter_code='vol-ch_no'` 拆分量查询；无 chapter 参数回全卷；no-match 回 200 空列表。前端按钮文案通用化「本章/册说明…章/册级通用」。
+- **验证**：本地隔离冒烟 10/10（xj15 17/74、az09 零回归 13/71）；线上终验 xj15 B4-1 0→17、xj14 8-1-1 0→36、az09 9-1=13 不变。
+- **验收纪律固化**：新卷上线必须逐端点实测（items 详情 / chapter-rules / 人材机 / toc / machines），禁只看 `volumes` 列表 available=true。
+
 ## v1.9.7 · 2026-10-20 · 爪哥（作者）· xj15 册说明交付口径纠偏，新坑 94
 
 - **坑 94（呈现层术语分流）**：爪哥质疑「册说明没按条交付」→ 实证 DB `quota_explain` 册说明全部按条落库（74 条=说明29+规则45，七册全覆盖，粒度细于市政卷：市政卷册说明仅在 parse `volume_notes` 整段留存未落库），parse/DB/前端三处恒等。真正缺陷在前端：虚拟章树节点与「第N册 册名」行二次重复册名、主标题「第4册 · 第四册…」重复、说明区块硬编码「章说明」（本卷无章层，实为册说明，术语错误致无法对账）。根治=chLabel/showCh 主标题按「虚拟章标题==vol title」判据去重 + `explainLabel()` 按结构分流（no=0/1→册说明，章层卷→章说明）；数据层零动。
