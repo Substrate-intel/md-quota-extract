@@ -359,3 +359,33 @@
 - **症状**：xj11 用户提供的（二）(OCR).pdf（Downloads/Documents 两副本）均 `needs_pass=1`，fitz/pikepdf/pypdf 三引擎空密码全败（**用户级密码，非 owner-only 权限加密**）→ twin 不可用；而（一）(OCR).pdf 无密码——站点 DRM 不一致，不能假设 twin 恒可用。
 - **根治/流程**：①twin 接入第一动作=验 needs_pass + 几何对齐（rect 逐页比对）+ 零文本页分布对照；②无密码 twin 直接走双源管线；③有密码时用本地产 OCR twin（rapidocr_onnxruntime，不可见文字层回填+坐标 px→pt 72/200 换算，与外部 twin 同构），**但 4 vCPU 小 VM 上并行收益薄**：每页任务重复 init 模型+重开 PDF=18.4s/页（须 Pool initializer 进程级单例），4 进程 onnxruntime 线程超订反而 15.7s/页（monkeypatch SessionOptions 限线程无效，内存带宽瓶颈），2 进程 11.3s/页为实测最优；④拿到 twin 密码后可反哺本地 OCR 精度审计（xj10 已有交叉验证先例）。
 - **验证**：xj11 最终用用户提供的无密码副本（(OCR)(1).pdf sha12=ffe37a296322）走双源，rect 全对齐、P101 内容正确、gate 门7 印页三交叉零违例。
+
+### 坑 78｜TOC 折行 buf 页级作用域：跨页折行标题被截成两个条目（xj12 实证）
+- **症状**：xj12（市政三）TOC P8 末行「2.焊接法兰式水表组成与安装(无旁通管」跨页折行，P9 首行「有止回阀)⋯⋯62」带页码 → parse_toc 的折行 `buf` 在页循环内初始化，P8 末的 buf 随页结束丢弃，P9 首行被当成独立 TOC 条目（'有止回阀)' 恒 unmatched）。
+- **根治**：折行 buf 提升为**函数级跨页持久**（`for pg` 外初始化）；册/章行清 buf 的逻辑保留。目录页之间夹杂的非 toc 页（如 P101 表格页）不影响——buf 只被 toc 页行消费。
+- **验证**：xj12 修复后 unmatched 4→3，sections 142，toc 逐步收敛到 144/144。
+
+### 坑 79｜TOC 层级归属双通道：坑71 页码排序 vs OCR 错页码前置（xj12 实证，两害相交）
+- **症状**：xj12 两条 TOC 故障同时出现且修法互斥——①「一、预(自)应力钢筋混凝土管安装(胶圈接口)」TOC 页码 OCR 错（9→5），坑71 按 `_key`（无页码行回填后继页码）排序后被**前置到「第五册/第一章」行之前** → 归属循环 vol/ch=None → 正文侧 toc_match 永败 → 该节掉进 rules 桶；②若改按原始 parse 序归属，TOC P9 的**2×2 分块版式**被打死：「八、井筒增高」等第三章节在原 OCR 序中位于「第六册」行之后 → (5,3) 21 节全部错配到 (6,1)。
+- **根治**：**双通道归属**——通道1（主）=坑71 排序后阅读序（保 2×2 分块恢复）；通道2（兜底）=原 parse 序（`_seq` 保留到归属后）前驱册/章行，**仅当通道1 结果 vol/ch 为 None 时回退**。对无 None 条目的卷（xj10/xj11 实测 0 条）行为与原逻辑完全一致，零回归。
+- **验证**：xj12 修复后 sections=144==TOC 144、matched=144；回归 xj10/xj11 节级 TOC 无 None 条目 → 兜底不触发。
+
+### 坑 80｜toc_match/toc_check 需标点盲比：OCR 丢顿号致双向 startswith 全败（xj12 实证）
+- **症状**：xj12 P77 正文「十二、室外消火栓消防水鹤安装」OCR **丢顿号**（TOC 为「消火栓、消防水鹤」），exact（norm 只去空白）不等、partial 双向 startswith 均失败（在「栓」后分叉）→ 落入 sec_not_in_toc 留痕、节丢失、TOC 缺 1。
+- **根治**：新增 `sp()`=norm 再去全部中英标点；toc_match 增加 `sp(tt)==sp(tn)` 判 exact；toc_check 对账同步用 sp 集合兜底（否则修复后 sections 存正文原样、TOC norm 仍不等）。
+- **验证**：xj12「十二、室外消火栓消防水鹤安装」入 sections，matched 143→144。
+
+### 坑 81｜title_truncated 补全无长度上界：短节标题被跨节长标题吞并（xj12 实证）
+- **症状**：xj12 P55「1.法兰」（八、铸铁穿墙管安装子节）入 sections 后，被 TOC 对照循环错补成「1.法兰式水表组成与安装(有旁通管有止回阀)」（十一节子节，19 字符 vs 3 字符）——`tn_.startswith(sn_)` 任意前缀都补，且同一 TOC 长标题可补多个 section → P55/P71 双重复、TOC '1.法兰' 恒 unmatched。
+- **根治**：补全约束**2≤长度差≤12**（与 partial 一致）+ 每个 TOC 条目只补第一个命中的 section（`_filled` 集）；title_truncated 本是 exact/partial 漏网时的双保险，不是万能补全器。
+- **验证**：xj12「1.法兰」保留短标题，P55/P71 不再重复。
+
+### 坑 82｜classify 的 toc 判据被表格点导引符欺骗：整页表格丢失（xj12 实证，坑57 同族）
+- **症状**：xj12 P101（5-3-56/57 阀门井续表）被 convert classify 判为 `toc`——表格规格行「1.10×1.1⋯· 1.10×1.1⋯」含点导引符 `⋯`，`has_toc_leader>=3 and len(joined)<3000` 成立 → 整页表格被 parse 跳过：**6 个 5-3 子目丢失（items 1677→1683 修复后）+ 15 条表格数据行误入 sec_not_in_toc 留痕**（'1.752.052.803.30' 被 SUB_SEC_RE 当「N.」行）。与坑57（目录页码点导引同形）同族：**点导引符不是目录专利**。
+- **根治**：toc 判据加权威形态约束——`toc_like = 点导行中以页码结尾（TOC_LINE_RE 匹配）的行数`，要求 `toc_like>=3` 才判 toc；「目 录」标题行仍一票通过。
+- **验证**：xj12 修复后 toc 5→4 页、quota_table 263→264、items +6、sec_not_in_toc 15→0。
+
+### 坑 83｜跨卷复制残留第三类：静态字面量（book 元数据/册章常数/门控 flag）（xj12 实证，坑74 同族）
+- **症状**：xj12 从 xj11 复制脚本后 sed 只换标识符 `xj11→xj12`，三类**字面量**残留：①parse 的 `book.title` 恒「（二）」（封面明明（三），OCR twin P2 实证）；②build_db 册章计数断言恒 xj10 的 `5册24章`；③gate 的 `main(make_manifest=True)` 被函数体内 `make_manifest = "--make-manifest" in sys.argv` **覆盖**（CLI 不传 flag 时 manifest 不生成、门8 直接 FileNotFoundError 崩）。
+- **根治**：①跨卷复制后除正则扫 `前卷号/前卷册名/前卷常数` 外，必查**书名/册章数/make_manifest 类字面量**；②gate flag bug：`make_manifest = make_manifest or "--make-manifest" in sys.argv`；③build_db/gate 计数断言全部实测回填并留注释。
+- **验证**：xj12 三项全修后 gate 9/9；book.title=「（三）（2020版）」与封面一致。
