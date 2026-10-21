@@ -2,6 +2,13 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.10.2 · 2026-10-22 · 爪哥（作者）· check_backflow B 层键名反查 + git 同步判定恢复 API 实查（坑102 同轮补齐）
+
+- **B 层**：VOLUME_META 以目录名为键、值是 `(key, kind, label)`——底座卷目录 `quota-extract` 与键名 `fj` 不同名，原「拼 `quota-extract-<key>` 再正则」误报未注册；改按**值首元反查**，detail 打「目录→key/kind/label」。
+- **git 同步判定**：`git_state` 在 ls-remote 失败时曾回退本地 `origin/main` 引用——API 通道推送后该引用不前移，网络抖动即假红（xj17 实证 `synced=False`，API 查远端树 a3027b6c/26290846 与本地逐字一致）。恢复三级链 **ls-remote → `_remote_main` API 实查（+tree 等价降级）→ 本地引用末位兜底**，补 `_slug`/`_auth_headers(repo)`（credential fill 带 cwd）。
+- **A 层口径声明**：`A 本卷已入 CHANGELOG` 对辽宁早期卷（fj/az*/sz*/jxtb/phb）恒红属历史账不覆盖（结项早于本 skill 建账），不做特例豁免；按期交付卷（xj*）必须为绿。
+- 验证：xj03/xj15/xj16/xj17 四卷 **12/12**；fj/az10 **11/12**（唯一红项=上述历史账，D 层全绿）。
+
 ## v1.10.1 · 2026-10-22 · 爪哥（作者）· check_backflow D 层判据升级（坑102）+ skill 仓脚本回收对齐
 
 - **坑102（核验脚本自身硬假设）**：xj16 回流误红「book_name 全称」——线上值「新疆维吾尔自治区高海拔地区施工增加费用标准」是 DB `fee_book_meta.title` 逐字全称，但 `_bn_ok` 关键词白名单只有「计价依据/定额」；xj17 首跑 `no such table: items`（fee 九表无 items 表）致 D 层中断。判据改三层：**权威源逐字对账**（`_db_title` 取 meta `key='title'`，`_norm` 折叠空白）> 结构实测（计数源分型 `items→fee_items→quota_items`，detail 标 `src=`）> 关键词白名单（仅无 title 键的卷兜底，白名单补「费用标准」）。

@@ -18,7 +18,6 @@ check_backflow.py —— 回流两连核销守卫（坑 46/47 的机械化根治
   C. 双仓本地态   .volumes_data_repo/.volumes_repo 干净 + volumes.json 的 sha256 == 本地权威 db
   D. 线上终验     /api/quota/volumes 有该卷 + items 数与本地一致 + book_name 为全称
 """
-import glob
 import hashlib
 import json
 import os
@@ -117,6 +116,17 @@ def git_state(repo, label):
         if rtree and ltree == rtree:
             return clean, True, local, remote, "ls-remote+tree等价(API双轨)"
         return clean, False, local, remote, "ls-remote"
+    # ls-remote 不通（git CONNECT 502 WAF 间歇）：先走 API 查远端真实 main，
+    # 最后才回退本地 origin/main 引用（API 推送后该引用陈旧，仅作末位兜底）。
+    remote = _remote_main(repo)
+    if remote:
+        if local == remote:
+            return clean, True, local, remote, "API ref"
+        _, ltree, _ = sh(["git", "rev-parse", "main^{tree}"], cwd=repo)
+        rtree = _remote_tree(repo, remote)
+        if rtree and ltree == rtree:
+            return clean, True, local, remote, "API ref+tree等价(API双轨)"
+        return clean, False, local, remote, "API ref"
     _, remote, _ = sh(["git", "rev-parse", "origin/main"], cwd=repo)
     if local == remote:
         return clean, True, local, remote, "origin/main"
@@ -127,15 +137,17 @@ def git_state(repo, label):
     return clean, False, local, remote, "origin/main(回退)"
 
 
-def _remote_tree(repo, commit_sha):
-    """经 GitHub API 取远端 commit 的 tree sha（tree 等价降级判定用）"""
-    m = re.search(r"github\.com[/:]([^/]+/[^.]+)", repo and sh(["git", "remote", "get-url", "origin"], cwd=repo)[1] or "")
-    if not m:
-        return None
-    import urllib.request
+def _slug(repo):
+    """origin URL → owner/repo（GitHub API 用）"""
+    _, url, _ = sh(["git", "remote", "get-url", "origin"], cwd=repo)
+    m = re.search(r"github\.com[/:]([^/]+/[^.]+?)(?:\.git)?/?$", url or "")
+    return m.group(1) if m else None
+
+
+def _auth_headers(repo):
+    """GitHub API 头（私有仓匿名 404 → 带 git credential token，与 git_api_push.py 同通道）"""
+    headers = {"User-Agent": "backflow-check", "Accept": "application/vnd.github+json"}
     try:
-        # 私有仓匿名 404 → 带 git credential token（与 git_api_push.py 同通道）
-        headers = {"User-Agent": "backflow-check", "Accept": "application/vnd.github+json"}
         r = subprocess.run(["git", "credential", "fill"], cwd=repo,
                            input="protocol=https\nhost=github.com\n\n",
                            capture_output=True, timeout=30, text=True)
@@ -143,9 +155,37 @@ def _remote_tree(repo, commit_sha):
                     if l.startswith("password=")), "")
         if tok:
             headers["Authorization"] = f"Bearer {tok}"
+    except Exception:
+        pass
+    return headers
+
+
+def _remote_main(repo):
+    """经 GitHub API 查远端真实 main sha（ls-remote 502 时的替代通道）。
+    本函数的存在理由：本地 origin/main 引用在 API 通道推送后不前移，网络一抖
+    回退该引用会误报未同步（2026-10-22 xj17 实证 synced=False 假红）。"""
+    slug = _slug(repo)
+    if not slug:
+        return None
+    try:
         req = urllib.request.Request(
-            f"https://api.github.com/repos/{m.group(1)}/git/commits/{commit_sha}",
-            headers=headers)
+            f"https://api.github.com/repos/{slug}/git/refs/heads/main",
+            headers=_auth_headers(repo))
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.load(resp).get("object", {}).get("sha")
+    except Exception:
+        return None
+
+
+def _remote_tree(repo, commit_sha):
+    """经 GitHub API 取远端 commit 的 tree sha（tree 等价降级判定用）"""
+    slug = _slug(repo)
+    if not slug:
+        return None
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{slug}/git/commits/{commit_sha}",
+            headers=_auth_headers(repo))
         return json.load(urllib.request.urlopen(req, timeout=15)).get("tree", {}).get("sha")
     except Exception:
         return None
@@ -160,10 +200,16 @@ def main():
 
     # ---- B. 成果注册（先查注册表拿到权威 db 路径）----
     src = open(SYNC, encoding="utf-8").read()
-    m = re.search(r'"quota-extract-%s":\s*\(([^)]*)\)' % re.escape(key), src)
-    check("B 成果注册 VOLUME_META", bool(m),
-          f"quota-extract-{key} " + ("已注册" if m else "未注册"),
-          f'sync_remote.py VOLUME_META 加一行 "quota-extract-{key}": (key, kind, label)')
+    # 坑 102 同类：VOLUME_META 以「目录名」为键、值是 (key, kind, label)，
+    # 底座卷目录名 quota-extract 与键名 fj 不同名——按目录名拼 quota-extract-<key>
+    # 匹配会误报未注册。改为按值首元（登记键）反查。
+    meta_hit = re.search(
+        r'"([^"]+)"\s*:\s*\(\s*"%s"\s*,\s*"(quota|fee|table)"\s*,\s*"([^"]*)"\s*\)'
+        % re.escape(key), src)
+    check("B 成果注册 VOLUME_META", bool(meta_hit),
+          (f"目录 {meta_hit.group(1)} → key={key} / kind={meta_hit.group(2)} / {meta_hit.group(3)[:20]}"
+           if meta_hit else f"key={key} 未注册"),
+          f'sync_remote.py VOLUME_META 加一行 "<卷目录>": ("{key}", kind, label)')
 
     # ---- C. 双仓本地态 + volumes.json 指纹一致 ----
     reg_path = os.path.join(REPO, "volumes.json")
@@ -176,8 +222,7 @@ def main():
                     entry = v
     if entry is None:
         check("C volumes.json 条目", False, f"key={key} 不在注册表", "跑 sync_remote.py 生成/同步 volumes.json")
-    else:
-        # entry["db"] 形如 liaoning-2024/<卷目录>/db_pdf|db_docx/<file>.db（仓内路径）
+    else:  # entry["db"] 形如 liaoning-2024/<卷目录>/db_pdf|db_docx/<file>.db（仓内路径）
         # 本地权威库=SP/<卷目录>/out|docx_source/<file>.db（site_db 同口径）
         parts = entry["db"].split("/")
         voldir, dbfile = parts[1], parts[-1]
@@ -213,6 +258,12 @@ def main():
               f"CHANGELOG 最新 {latest}，tags 含={latest in out.split()}",
               f"git tag {latest} && git push origin {latest}")
     # 本卷收官记录已入 CHANGELOG（防"卷完成但回写没进版本"）
+    # 作用域：仅本 skill 链产物（卷目录含 scripts/gate_*.py 的 md 管线门控）。
+    # 底座房建卷 quota-extract（key=fj）走 docx/md 混合早期链、早于本 skill 建账，
+    # 由 docx-quota-extract 侧归账——对本 skill CHANGELOG 记 N/A，不计入核销。
+    # 本卷收官记录已入 CHANGELOG（防"卷完成但回写没进版本"）
+    # 注：辽宁早期卷（fj/az*/sz*/jxtb/phb 等）结项早于本 skill 建账，本项对其恒红属
+    # 历史账不覆盖，不属当期缺口；按期交付卷（xj*）必须为绿。
     check("A 本卷已入 CHANGELOG", bool(re.search(r"^## .*" + re.escape(key), ch, re.M)),
           f"CHANGELOG 含 {key} 条目",
           "按迭代协议三件准入制（根因/根治/验证证据）回写后 commit")
