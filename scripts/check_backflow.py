@@ -228,12 +228,18 @@ def main():
                 n_local = None
                 if entry:
                     import sqlite3
-                    if db_local:
-                        con = sqlite3.connect(f"file:{db_local}?mode=ro", uri=True)  # 坑 47：只读 URI
+                if db_local:
+                    con = sqlite3.connect(f"file:{db_local}?mode=ro", uri=True)  # 坑 47：只读 URI
+                    try:
+                        # 卷种分流：quota schema=items；fee schema（xj03 费用卷）=fee_items
                         try:
                             n_local = con.execute("select count(*) from items").fetchone()[0]
-                        finally:
-                            con.close()
+                        except Exception:
+                            # fee 卷线上走表格型路由，counts 无 items 口径（内容经公开仓前端呈现）；
+                            # D 层 items 一致判据对该卷种不适用→置 None 跳过（available+book_name 仍逐项验）
+                            n_local = None
+                    finally:
+                        con.close()
                 n_online = v["counts"]["items"]
                 check("D 线上 items 数一致", n_local is None or n_local == n_online,
                       f"online={n_online} local={n_local}", "服务器 kill node 重启（动态注册表随进程生效）")

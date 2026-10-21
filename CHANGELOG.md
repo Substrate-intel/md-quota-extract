@@ -2,6 +2,17 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.9.9 · 2026-10-22 · 爪哥（作者）· 四卷官方勘误 overlay 接入（xj01/xj02/xj03/xj15）+ check_backflow fee 卷种分流
+
+- **勘误接入纪律定版**（对标辽宁 apply_errata.py）：忠实层（parse JSON/md/源 PDF）只读；勘误后值入 DB 工作层；`erratas` 表 wrong_text 双值留痕按 errata_id 溯源；三态核对（A 错版一致→applied / B 已更正→不动 / C 疑点→issues 禁静默修正）+ 扩展态 A_bare（抽取值='见表' 占位符而勘误指定列级单位→落正并留 issue）。
+- **四卷战果**：xj03 费用卷 3/3（T010 利润费率安装 10.5~15.9→11~16、管道场站 20~25→21~26；I046 总承包服务费首句「总承包单位依法…」→「招标人依法…」）；xj01 上册 8/8（JR-094/SM-099/SM-124 三条 desc 条文、5-36 水 2.69→0.69、10-1/10-3 名称厚度 100→180、官方补充定额附件 5 子目 B4-1~3+B10-1~2 全人材机入库）；xj02 下册 4/4（11-10 干混地面砂浆 0.2→0.51、16-174 回旋钻机/泥浆泵 0.88→0.088、JR-143 真石漆延长米→油漆面积）；xj15 安装补充 37 条=applied 10+applied_bare 1+not_in_db 26（B4-10 单位 't'→'t（平均每吨）' 为 A_bare 案例；B10-97~99 水行删除致消耗量 3065→3062；26 条附录/组织机构类无对应数据留档禁造）。
+- **门控**：四卷新增门10 勘误 overlay；xj01 门3 补充子目形态断言（src_page NULL/print_page∈(1,2)/B 码连续）+ 门7 双轨（JSON==md 原文轨 + DB==JSON⊕勘误勘误轨）；xj15 门2 期望 cons=N_CONS−勘误删除数（数据驱动）；xj01 全链复跑门8 字节级一致。
+- **前端**：四卷 payload.erratas + 子目级 errata_status='hit' 徽标；xj01 SUP 补充定额节点（第四/十册下「补充定额附件」，page=null）；xj15「勘误表」面板 + 头部计数。
+- **smoke 勘误断言**：xj01/xj02 28→33、xj03 +3、xj15 +4（含删除行核销），四卷全绿。
+- **check_backflow 修复（v1.5.3）**：D 层 items 计数查询 fee 卷种分流——xj03 fee schema 无 items 表（线上表格型路由 counts 亦无 items 口径），原 `select count(*) from items` 抛异常致整层 FAIL；改为 fee 卷置 None 跳过该判据，保留 available+book_name 全称终验（xj03 复跑 10/11→余项即本仓提交自身）。
+- **xj02 CHANGELOG 补录**：xj02 此前缺条目致 A 层核销 FAIL（2026-10-22 实证），本次一并补。
+- **双仓发布+回流**：私有仓 4 db + 公开仓前端/报告/portal 同步；xj01 11/11（线上 items=1760=1755+5 补充）、xj15 11/11（314）、xj02 线上 items=1296 与勘误后指纹一致、xj03 available+book_name 全称；portal 补注册 xj01/xj02（kind=docx_quota，sub=out 覆盖）。
+
 ## v1.9.8 · 2026-10-20 · 爪哥（作者）· 站点 chapter-rules 多源适配，新坑 95（xj10-15 六卷系统性缺口）
 
 - **坑 95（站点级系统性缺口）**：站点 `routes/quota.js` 章级条文单源假设只认 `desc_rules`（OCR 卷 schema）——xj10-15 九表卷章/册说明存 `quota_explain`，`hasTable('desc_rules')` 判假短路致子目详情 `chapter_rules_count=0`、端点 400/空。**影响 6 卷，非 xj15 独有**；线上「展开本章说明」按钮恒 0 条即用户「册说明没交付」的真实来源。
