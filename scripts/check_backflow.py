@@ -56,15 +56,46 @@ def check(name, ok, detail, fix):
 
 
 def _bn_ok(key, book_name):
-    """D 层 book_name 全称判据按卷种分流（2026-10-20 xj15 修复）：
-    fee 卷（费用定额）全称须含「计价依据」；quota 卷（消耗量/预算定额）全称须含
-    「定额」。原判据硬编码「计价依据」会把全部 quota 卷误判 FAIL（xj15 实证：
-    线上 book_name=「…安装工程补充消耗量定额（2020版）」正确但被误红）。"""
+    """D 层 book_name 关键词回退判据（仅在本地 DB 无权威 title 键时使用）。
+    判据历史：原硬编码「计价依据」把 quota 卷误判 FAIL（xj15 实证）；改二分后
+    又漏了非「定额/计价依据」命名的官方文件——xj16「高海拔地区施工增加费用
+    标准」两词皆无被误红。故本函数只作回退，首选 _db_title 逐字对账。"""
     if not book_name:
         return False
-    if "计价依据" in book_name or "定额" in book_name:
-        return True
-    return False
+    return ("计价依据" in book_name or "定额" in book_name or "费用标准" in book_name)
+
+
+def _db_title(db_path):
+    """本地权威书名单一取值（D 层 book_name 逐字对账基准）。
+
+    meta 表统一为 key/value 形制（fee_book_meta / quota_book_meta / book_meta），
+    书名为 key='title' 行。辽宁卷与 xj01/xj02 无该键（书名由 finalize 生成）→
+    返回空串，调用方回退关键词判据。"""
+    if not db_path or not os.path.exists(db_path):
+        return ""
+    import sqlite3
+    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)  # 坑 47：只读 URI
+    try:
+        tabs = {r[0] for r in con.execute(
+            "select name from sqlite_master where type='table'")}
+        for t in ("fee_book_meta", "quota_book_meta", "book_meta"):
+            if t not in tabs:
+                continue
+            cols = [r[1] for r in con.execute("PRAGMA table_info(%s)" % t)]
+            if "key" not in cols or "value" not in cols:
+                continue
+            r = con.execute(
+                "select value from %s where key='title'" % t).fetchone()
+            if r and r[0]:
+                return str(r[0]).strip().strip('"')
+    finally:
+        con.close()
+    return ""
+
+
+def _norm(s):
+    """书名比较归一：折叠连续空白（全/半角空格、制表、换行）+ 去首尾。"""
+    return re.sub(r"\s+", "", str(s or "")).strip()
 
 
 def git_state(repo, label):
@@ -225,8 +256,20 @@ def main():
                 check("D 线上 kind 与 schema 一致", kind_local is None or v.get("kind") == kind_local,
                       f"online={v.get('kind')} schema实测={kind_local}",
                       "坑 100：db_profile 三型判定（fee_items|fee_sections→fee）+ 重跑 sync_remote + kill node")
-                check("D 线上 book_name 全称", _bn_ok(key, v.get("book_name") or ""),
-                      v["book_name"][:40], "坑 46：finalize 补纯文本 book_name 后重跑+重同步")
+                # 坑 46 判据升级：本地 DB 有权威 title 即逐字对账（强断言）；
+                # 无 title 键的卷（辽宁全套 + xj01/xj02，书名由 finalize 生成）
+                # 回退关键词判据。原纯关键词判据漏判 xj16「…费用标准」。
+                bn = v.get("book_name") or ""
+                t_local = _db_title(db_local) if (entry and db_local) else ""
+                if t_local:
+                    ok_bn = _norm(bn) == _norm(t_local)
+                    bn_detail = f"online={bn[:34]} | db.title={t_local[:34]}"
+                    bn_fix = "坑 46：book_name 须为全称且与本地 DB meta.title 逐字一致；finalize 后重跑+重同步"
+                else:
+                    ok_bn = _bn_ok(key, bn)
+                    bn_detail = f"{bn[:40]}（本地无 title 键→关键词回退）"
+                    bn_fix = "坑 46：finalize 补纯文本 book_name 后重跑+重同步"
+                check("D 线上 book_name 全称", ok_bn, bn_detail, bn_fix)
         except Exception as e:
             check("D 线上终验", False, f"API 不可达/异常: {e}", "确认服务器在线；维护期可用 --offline")
 

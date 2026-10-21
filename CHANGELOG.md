@@ -2,6 +2,13 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.10.1 · 2026-10-22 · 爪哥（作者）· check_backflow D 层判据升级（坑102）+ skill 仓脚本回收对齐
+
+- **坑102（核验脚本自身硬假设）**：xj16 回流误红「book_name 全称」——线上值「新疆维吾尔自治区高海拔地区施工增加费用标准」是 DB `fee_book_meta.title` 逐字全称，但 `_bn_ok` 关键词白名单只有「计价依据/定额」；xj17 首跑 `no such table: items`（fee 九表无 items 表）致 D 层中断。判据改三层：**权威源逐字对账**（`_db_title` 取 meta `key='title'`，`_norm` 折叠空白）> 结构实测（计数源分型 `items→fee_items→quota_items`，detail 标 `src=`）> 关键词白名单（仅无 title 键的卷兜底，白名单补「费用标准」）。
+- 新增断言 `D 线上 kind 与 schema 一致`：本地 schema 反推 kind（fee_items|fee_sections→fee / items|quota_items→quota / 其余→table）↔ 线上 kind，把坑100 判定前置到核验层（每卷断言数 10→12）。
+- **skill 仓副本回收**：`scripts/check_backflow.py` 曾落后三项历史修复（SKILL 路径锚定用户级仓 / `_bn_ok` 卷种分流 / ls-remote rc 判定），长期只在卷目录维护——本次以卷内最新版为准回灌 skill 仓，并记入坑102 教训：单点脚本跨卷复用须定期 diff 回收。
+- 验证：xj16/xj17/xj03 三 fee 卷 12/12；xj03 items 66(src=fee_items)、xj16 47、xj17 46，kind 三卷均 fee 且与 schema 实测一致。
+
 ## v1.10.0 · 2026-10-22 · 爪哥（作者）· xj16/xj17 两新卷交付 + fee 卷型根治（坑100/101）+ 站点 fee 路由补全
 
 - **xj17 计价依据问题解释（一）～（四）合集**（fee schema 问答型）：四份官方解释纯问答部分结构化——17 节（4 章+13 节）/46 问/4 表/3 注/17 toc；解释三钢筋调整系数表+2014 版垂直运输系数表、解释四 B10-114~117 两表入 fee_tables（扩展 `item_id` 问答-表关联列）；**勘误部分整区剔除不入卷**（j3 五/六部分、j4 四/五/六部分，evidence 留痕 j3 物7/j4 物4），报告给勘误去向互见表+卷内互见注 N001；六门（含门2 `XJ15_S01` 跨卷硬编码基线：T003/T004 与 xj15 S01 逐值一致）+ smoke 10/10，两次全链字节级复现。
