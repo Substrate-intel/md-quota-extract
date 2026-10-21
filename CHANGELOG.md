@@ -2,6 +2,16 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.10.0 · 2026-10-22 · 爪哥（作者）· xj16/xj17 两新卷交付 + fee 卷型根治（坑100/101）+ 站点 fee 路由补全
+
+- **xj17 计价依据问题解释（一）～（四）合集**（fee schema 问答型）：四份官方解释纯问答部分结构化——17 节（4 章+13 节）/46 问/4 表/3 注/17 toc；解释三钢筋调整系数表+2014 版垂直运输系数表、解释四 B10-114~117 两表入 fee_tables（扩展 `item_id` 问答-表关联列）；**勘误部分整区剔除不入卷**（j3 五/六部分、j4 四/五/六部分，evidence 留痕 j3 物7/j4 物4），报告给勘误去向互见表+卷内互见注 N001；六门（含门2 `XJ15_S01` 跨卷硬编码基线：T003/T004 与 xj15 S01 逐值一致）+ smoke 10/10，两次全链字节级复现。
+- **xj16 高海拔地区施工增加费用标准**（官方附件 PDF+解读 docx）：5 节/47 条目/2 表/1 注/勘误 1 条 applied；gate 6/6+smoke OK。
+- **坑100（站点级总闸缺陷）**：`sync_remote.py db_profile` 二值判 kind 把 fee schema（无 items 表）误判 table → xj03 线上 /items、/chapters 恒 400、/volumes 计数 0、/search 排除、前端落入 mix 分支。根治三型判定（fee/quota/table）+ 站点 fee 路由补全（chapterRulesOf/CountOf 增 fee_notes 第三源：节注+祖先章注 parent 实测链+卷级注；fee 子目详情 chapter_code 别名+计数实算+item 关联表条件列；前端 onVol/search/render/itemDetail 全 fee 分支）+ /provinces 纳入 fee_items。本地 stub harness 28 断言；线上 xj03 items 66/chapters 17/chapter-rules 8 注全恢复。
+- **坑101（问答型 fee 卷提取专项）**：span 行构建容差 3.5（上标/波浪号 y 漂移）+ 页码先行判定防「1」→「¹」；表格 span bbox 剔除防正文 scrambling（Q021 实证）；问签状态机（无答标题短行规则/节后无编号自动起问）；印页数据驱动（j1 物−1，j2-j4 物）；图片层区域渲染取证（j4 文头标题）；SQLite 页布局指纹坑（--check-only 跳重建后跑 apply 失配→全链必含 build_db）。
+- **xj15 口径演变固化**：318 子目/3086 消耗量=基线 3065−勘误删除 3（B10-97~99 水行）+补充新增 4 子目/24 行（B10-114~117，即解释四两表同源）；portal/volumes.json 已刷新（旧档 314 留痕于 v1.9.9）。
+- **发布链**：双仓（私有 6 db+volumes.json，公开 17 文件含 xj16/xj17 前端与报告）经 git_api_push API 通道推送（git CONNECT 502 WAF 间歇）；服务器 webhook 协同自动落盘+手动拉取站点代码+taskkill node 看门狗拉起；线上逐端点终验（volumes/search/chapters/items/详情/chapter-rules/provinces 全绿，新疆 11 卷 10617 items）。
+- **REGION_EXCLUDE 纪律再实证**：xj16/xj17 须显式加入 liaoning-2024 排除集（宽 glob `quota-extract*` 劫持，坑95 同款），本次接入时同步追加。
+
 ## v1.9.9 · 2026-10-22 · 爪哥（作者）· 四卷官方勘误 overlay 接入（xj01/xj02/xj03/xj15）+ check_backflow fee 卷种分流
 
 - **勘误接入纪律定版**（对标辽宁 apply_errata.py）：忠实层（parse JSON/md/源 PDF）只读；勘误后值入 DB 工作层；`erratas` 表 wrong_text 双值留痕按 errata_id 溯源；三态核对（A 错版一致→applied / B 已更正→不动 / C 疑点→issues 禁静默修正）+ 扩展态 A_bare（抽取值='见表' 占位符而勘误指定列级单位→落正并留 issue）。

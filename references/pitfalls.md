@@ -460,3 +460,41 @@
 - **根治**：路由改**多源适配**（统一对外契约 `{block_type, md_kind, seq, print_page, text}`）：①`chapterRulesCountOf()` 与 `chapterRulesOf()` 依次探测 desc_rules → quota_explain → null；②九表卷 `chapter_code` 形制 `vol-ch_no`（'4-0'/'10-1'）→ `chapterCodeParts()` 正则拆分查 `quota_explain WHERE vol=? AND ch_no=?`；③`mode` 映射 block_type/md_kind，`pno` 映射 print_page，`id` 映射 seq；④无 chapter 参数时返回全卷（xj15=74 条）；⑤no-match 返回 200 空列表（附录虚拟章 12-1 等），仅两表全无才 400。前端按钮文案同步通用化「本章/册说明与计算规则…章/册级通用」。
 - **验证**：本地隔离冒烟 10/10（xj15 17/74 条 + block_type 双形态 + az09 desc_rules 零回归 13/71 条）；线上终验 xj15 B4-1 count=0→17、xj14 8-1-1 count=0→36、az09 9-1=13 不变。
 - **同族预警**：与坑 73（quota_book_meta 键名分裂）、记忆「quota 九表无 item_labors/materials/machines 兼容表→子目详情恒空数组」同族——**站点对两套 schema（辽宁/OCR 卷 vs 新疆九表卷）的兼容层是逐个端点补的，缺一处就静默返回空**。新卷交付验收必须含「站点端点适配清单」：items 详情 / chapter-rules / labors-materials-machines / toc / machines 逐端点实测，禁只看 volumes 列表 available=true。
+
+### 坑 96｜check_backflow D 层 items 计数须卷种分流：fee 卷无 items 表，硬查整层 FAIL（2026-10-22 xj03 实证，v1.5.3 修复）
+- **症状**：四卷勘误回流核销时，xj03（fee schema）D 层 items 计数查询 `select count(*) from items` 抛 `no such table` → 整层 FAIL，11 项核销卡死。
+- **根因**：回流核验脚本对全卷种统一按 items 表计数；fee 卷（xj03）行数在 fee_items，且线上表格型路由 counts 口径亦无 items 项。
+- **根治**：D 层 items 计数按卷种分流——fee 卷置 None 跳过该判据，保留 available+book_name 全称终验（book_name 取 fee_book_meta 全称≠label）；xj03 复跑 10/11→余项即本仓提交自身。
+- **同族预警**：与坑95/坑100 同族——**跨卷种脚本禁假设统一表名，须按 schema 探测分流**。
+
+### 坑 97｜勘误三态之外需 A_bare 扩展态：单位占位符 '见表' 命中勘误列级单位（xj15 B4-10 实证）
+- **症状**：xj15 B4-10 抽取值单位为占位符 '见表'（BARE_UNITS 白名单形态），勘误文件指定列级单位 't（平均每吨）'——按三态判据既非 A 错版一致（抽取形态是占位符非错字）亦非 C 疑点，无所依从。
+- **根治**：三态（A 错版一致→applied / B 已更正→不动 / C 疑点→issues 禁静默修正）之外立扩展态 **A_bare**——'见表' 占位符命中勘误列级单位时按勘误落正，并留 errata_bare_unit issue 双留痕；禁按 C 挂起（挂起=勘误白给）。
+- **验证**：xj15 applied 10+applied_bare 1+not_in_db 26 全链对账；smoke 增删除行核销与 bare 单位断言。
+
+### 坑 98｜smoke 基线数字须区分「勘误驱动预期变更」与「回归」：可溯源才可改断言
+- **症状**：xj15 勘误删除 B10-97~99 水行后 smoke 基线消耗量 3065→3062 失配——若不改断言则假红，若随手改则掩盖真回归。
+- **根治**：基线变更必须**可溯源**（勘误删除行/新增行在 erratas 表与门2 同口径有据）才可改断言，并同步补勘误 overlay 断言组（applied 行新值在窗/删除行禁现/not_in_db 计数）防假绿；xj01 items 1755→1760（补充定额 5 子目）同理。
+- **同族预警**：字节级复现纪律的延伸——**基线是契约不是快照，变更须带证据链**。
+
+### 坑 99｜portal 注册卷 kind 按 DB schema 选，禁按卷名/印象：xj01/xj02 是 docx_quota 形态（2026-10-22 实证）
+- **症状**：xj01/xj02（新疆房建上下册，OCR 双源但落库 schema=book_meta+items+item_labors/materials/machines，与辽宁 sz01 docx 卷同族）若按「xj 前缀→xj_quota 收集器」注册，查询即 `no such table: quota_items`。
+- **根治**：kind/收集器按 DB 实测 schema 选——book_meta+items+item_* → docx_quota（+sub=out 覆盖）；quota_book_meta+quota_* 九表 → xj_quota（xj10-15）；fee_* 九表 → fee（见坑100）。注册前必须 PRAGMA 实测表集。
+- **同族预警**：与坑73（quota_book_meta 键名分裂）、坑100 同族——**schema 探测是一切跨卷兼容的前置**。
+
+### 坑 100｜fee schema 卷型误判：db_profile 无 items 表即判 table，致站点 fee 路由全线落空（xj03 线上三端点 400，2026-10-22 xj16/xj17 上线暴露）
+- **症状**：xj03（费用定额，fee schema 九表）线上 `/api/quota/xj03/items` 恒 400「该卷无子目表」、`/chapters` 恒 400「该卷为表格型，无章节树」、`/volumes` 计数全 0、`/search` 跨卷检索不含 xj03；前端选卷后列表请求落入 `/mix` 分支（kind 非 quota 即 else）同样 400。fee-tables/fee-notes/fee-programs 端点有数据但 UI 未接线。
+- **根因**：`sync_remote.py db_profile()` 按 `"items" in tables` 二值判 kind——fee schema（fee_items/fee_sections，无 items 表）被误判 `kind="table"`。站点全部 fee 分支一律 key 在 `meta.kind==='fee'`（/volumes 计数、/items 列表与详情、/chapters→feeSections、/search 收录），kind 一错全线静默降级；前端 quota.html 的 search()/render()/onVol() 亦无 fee 分支（KIND='fee' 落入 mix else）。
+- **根治**（数据管线 + 站点双侧）：①`db_profile` 改三型判定——`fee_items|fee_sections` 存在→`kind="fee"`（items=fee_items 计数）；`items|quota_items`→quota；台班/配比→table；②站点 `chapterRulesCountOf/chapterRulesOf` 增 fee_notes 多源（坑95 范式第三源）：节注+祖先章注（`fee_sections.parent` 实测链上溯，禁字符串切分防命名误推）+卷级注（section_id NULL 对全卷可见）；③fee 子目详情补 `chapter_code=section_id` 别名、章级注文计数实算（原硬编码 0）、item 关联表（`fee_tables.item_id` 条件查询，xj03/xj16 无该列→空数组保同构）；④前端 onVol/search/render/itemDetail 增 fee 分支（章树下拉+/items 列表/content 正文渲染/关联小表/kv 条件化）。
+- **验证**：本地 stub-express harness 28 断言（xj03/xj16/xj17 全端点 + xj15/fj 回归）；线上终验 xj03 items 66/chapters 17/chapter-rules 8 注、xj16 47、xj17 46+17 节+Q044 关联表 T003/T004、search 高海拔 18 命中、provinces 新疆 10617（含 fee 159）。
+- **同族预警**：与坑95（chapter-rules 单源）、坑47（docx_quota 路由）同族——**「卷型/kind 是站点全端路由的总闸，判定错一处则所有端点静默降级为空/400，且 volumes 列表仍显示 available=true」**。新 schema 卷上线 checklist：①db_profile kind 三型实测；②站点每个 kind 分支（volumes/search/chapters/items/详情/chapter-rules/provinces）逐端点打样；③前端 KIND 全分支（quota/fee/table）走查；④volumes.json 的 kind/items 与 DB 实测对账。
+
+### 坑 101｜问答型 fee 卷（xj16 高海拔附件+解读 / xj17 解释一~四合集）提取专项：上标映射/表格剔除/问签状态机/勘误整区剔除
+- **span 级行构建与上标映射**：按 y 聚类（容差 3.5——覆盖上标 ~1.2 与波浪号 ~2.8 的 y 漂移，正文行距 28pt 不误并）；小字号（<0.7×正文）单位数字 span→²/³（「1m³」「40000m²」）；**页码行必须先于上标映射判定**（页码 9pt 同属小字号，用 raw 未映射文本判 PAGE_NUM_RE，否则「1」被映射成「¹」）。原文另有单字符「㎡」，断言清单禁臆造「m²」串。
+- **表格坐标重建与正文防串**：`find_tables` 坐标级重建表格本体；正文 span 必须按 bbox 中心点剔除表格区（`in_any`），否则表格文本混入问答 content（xj17 Q021 实证 scrambling）；表格本体提取后单位 `m3`→`m³` 归一，合并格按提取形态保留。
+- **问签状态机**：节标题=「第X部分」或含「有关问题解释」的汉字编号行（折行增量合并、遇关键词即止）；问题=汉字编号行或阿拉伯编号行（后块含「答：」或本节首条）；子目=阿拉伯编号且无「答：」且本节已有条目；**无答标题式问题**（短行<18 字为折行剩余属标题，长行且括号配平方可断）；节后无编号问题自动起问（防节标题折行吸收吞掉首行——j2 sec2 实证「答：无宿主问题」）。
+- **勘误整区剔除**：j3 五/六部分、j4 四/五/六部分按「勘误」定位起点整区剔除（勘误=overlay 不入卷），evidence 计数留痕（j3 物7/j4 物4），门5 断言勘误文本零泄漏；交付报告给「勘误去向互见表」（解释三/四勘误→xj01/02/03/15/16 对应条目），卷内互见注 N001 说明去向。
+- **印页口径数据驱动**：j1 印=物−1；j2/j3/j4 印=物（众数实测，每卷一标）。
+- **跨卷交叉核对**：xj17 T003/T004（解释四 B10-114~117）与 xj15 补充定额 S01 逐值一致（人工 0.336/0.420/0.835/1.084 等）→ 固化为门2 `XJ15_S01` 硬编码基线；xj15 口径演变 318/3086=基线 3065−勘误删除 3+补充新增 4 子目/24 行（B10-114~117 即解释四两表同源）。
+- **图片层取证**：j3 算例图示、j4 文头标题为图片层（直接提取全黑 alpha 掩码）→ 页面区域渲染 clip @3x 目视取证，硬编码 `J4_TITLE` 并在报告说明。
+- **SQLite 指纹坑**：`--check-only` 跳过重建后跑 apply（DROP/CREATE erratas）改变页布局致门6 指纹失配——标准全链必须含 build_db 重建；两次全链复跑字节级一致（sha256 比对）。

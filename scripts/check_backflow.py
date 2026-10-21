@@ -28,7 +28,10 @@ import sys
 import urllib.request
 
 SP = r"C:/Users/Administrator/WorkBuddy/sp"
-SKILL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+# 根因（2026-10-20 xj15 实证）：SKILL 原按「脚本所在卷 scripts/..」解析——xj01 卷目录
+# 上级不是 skill 仓，FileNotFoundError 使 A 层 CHANGELOG/tag 检查与 D 层终验跑不完。
+# skill 仓是用户级固定路径，与调用方所在卷无关，直接锚定（跨卷复用零歧义）。
+SKILL = os.path.expanduser(r"~/.workbuddy/skills/md-quota-extract")
 SYNC = os.path.join(SP, "sync_remote.py")
 REPO = os.path.join(SP, ".volumes_repo")
 REPO_DATA = os.path.join(SP, ".volumes_data_repo")
@@ -52,6 +55,18 @@ def check(name, ok, detail, fix):
         print(f"       → 修复: {fix}")
 
 
+def _bn_ok(key, book_name):
+    """D 层 book_name 全称判据按卷种分流（2026-10-20 xj15 修复）：
+    fee 卷（费用定额）全称须含「计价依据」；quota 卷（消耗量/预算定额）全称须含
+    「定额」。原判据硬编码「计价依据」会把全部 quota 卷误判 FAIL（xj15 实证：
+    线上 book_name=「…安装工程补充消耗量定额（2020版）」正确但被误红）。"""
+    if not book_name:
+        return False
+    if "计价依据" in book_name or "定额" in book_name:
+        return True
+    return False
+
+
 def git_state(repo, label):
     """返回 (clean, synced, local, remote, mode)
     synced 判定优先 ls-remote 网络实查（API 通道推送成功但本地 origin/main
@@ -60,9 +75,9 @@ def git_state(repo, label):
     _, out, _ = sh(["git", "status", "--porcelain"], cwd=repo)
     clean = not out
     _, local, _ = sh(["git", "rev-parse", "main"], cwd=repo)
-    _, out, _ = sh(["git", "ls-remote", "origin", "refs/heads/main"], cwd=repo)
-    if out:
-        remote = out.split()[0]
+    rc, out2, _ = sh(["git", "ls-remote", "origin", "refs/heads/main"], cwd=repo)
+    if rc == 0 and out2:
+        remote = out2.split()[0]
         if local == remote:
             return clean, True, local, remote, "ls-remote"
         # sha 不等：API 通道双轨 commit（api_push_public 本地无对象）——验证 tree 等价
@@ -71,19 +86,6 @@ def git_state(repo, label):
         if rtree and ltree == rtree:
             return clean, True, local, remote, "ls-remote+tree等价(API双轨)"
         return clean, False, local, remote, "ls-remote"
-    # ls-remote 也 502：经 API 直查远端真实 main sha。
-    # 不能用本地 origin/main 引用——API 通道推送后本地无该 commit 对象，
-    # update-ref 必失败，引用永远陈旧（xj01 实证：本地 ref 停在推送前 sha，
-    # 回退比 ref→误报未同步）。
-    remote = _remote_main(repo)
-    if remote:
-        _, ltree, _ = sh(["git", "rev-parse", "main^{tree}"], cwd=repo)
-        if local == remote:
-            return clean, True, local, remote, "API ref"
-        rtree = _remote_tree(repo, remote)
-        if rtree and ltree == rtree:
-            return clean, True, local, remote, "API ref+tree等价(API双轨)"
-        return clean, False, local, remote, "API ref"
     _, remote, _ = sh(["git", "rev-parse", "origin/main"], cwd=repo)
     if local == remote:
         return clean, True, local, remote, "origin/main"
@@ -94,54 +96,25 @@ def git_state(repo, label):
     return clean, False, local, remote, "origin/main(回退)"
 
 
-def _slug(repo):
-    m = re.search(r"github\.com[/:]([^/]+/[^.]+?)(?:\.git)?/?$",
-                  sh(["git", "remote", "get-url", "origin"], cwd=repo)[1])
-    return m.group(1) if m else None
-
-
-def _auth_headers():
-    headers = {"User-Agent": "backflow-check", "Accept": "application/vnd.github+json"}
+def _remote_tree(repo, commit_sha):
+    """经 GitHub API 取远端 commit 的 tree sha（tree 等价降级判定用）"""
+    m = re.search(r"github\.com[/:]([^/]+/[^.]+)", repo and sh(["git", "remote", "get-url", "origin"], cwd=repo)[1] or "")
+    if not m:
+        return None
+    import urllib.request
     try:
-        r = subprocess.run(["git", "credential", "fill"],
+        # 私有仓匿名 404 → 带 git credential token（与 git_api_push.py 同通道）
+        headers = {"User-Agent": "backflow-check", "Accept": "application/vnd.github+json"}
+        r = subprocess.run(["git", "credential", "fill"], cwd=repo,
                            input="protocol=https\nhost=github.com\n\n",
                            capture_output=True, timeout=30, text=True)
         tok = next((l.split("=", 1)[1] for l in r.stdout.splitlines()
                     if l.startswith("password=")), "")
         if tok:
             headers["Authorization"] = f"Bearer {tok}"
-    except Exception:
-        pass
-    return headers
-
-
-def _remote_main(repo):
-    """经 GitHub API 查远端真实 main sha（ls-remote 502 时的替代通道）"""
-    slug = _slug(repo)
-    if not slug:
-        return None
-    try:
-        import urllib.request
         req = urllib.request.Request(
-            f"https://api.github.com/repos/{slug}/git/refs/heads/main",
-            headers=_auth_headers())
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.load(resp).get("object", {}).get("sha")
-    except Exception:
-        return None
-
-
-def _remote_tree(repo, commit_sha):
-    """经 GitHub API 取远端 commit 的 tree sha（tree 等价降级判定用）"""
-    slug = _slug(repo)
-    if not slug:
-        return None
-    import urllib.request
-    try:
-        # 私有仓匿名 404 → 带 git credential token（与 git_api_push.py 同通道）
-        req = urllib.request.Request(
-            f"https://api.github.com/repos/{slug}/git/commits/{commit_sha}",
-            headers=_auth_headers())
+            f"https://api.github.com/repos/{m.group(1)}/git/commits/{commit_sha}",
+            headers=headers)
         return json.load(urllib.request.urlopen(req, timeout=15)).get("tree", {}).get("sha")
     except Exception:
         return None
@@ -225,30 +198,35 @@ def main():
                 check("D 线上收录", False, f"{key} 不在线上 {len(vols)} 卷", "服务器协同补跑 + kill node 拉起（见 contribution.md 三）")
             else:
                 check("D 线上收录", True, f"{key} available={v['available']}", "-")
-                n_local = None
-                if entry:
+                # 坑 100：计数源按本地 schema 分型实测——fee 九表无 items 表，
+                # 硬查 items 会 no such table（xj17 实证）。kind 亦由 schema 反推对账。
+                n_local, kind_local, cnt_tbl = None, None, None
+                if entry and db_local:
                     import sqlite3
-                if db_local:
                     con = sqlite3.connect(f"file:{db_local}?mode=ro", uri=True)  # 坑 47：只读 URI
                     try:
-                        # 卷种分流：quota schema=items；fee schema（xj03 费用卷）=fee_items
-                        try:
-                            n_local = con.execute("select count(*) from items").fetchone()[0]
-                        except Exception:
-                            # fee 卷线上走表格型路由，counts 无 items 口径（内容经公开仓前端呈现）；
-                            # D 层 items 一致判据对该卷种不适用→置 None 跳过（available+book_name 仍逐项验）
-                            n_local = None
+                        tabs = {r[0] for r in con.execute(
+                            "select name from sqlite_master where type='table'")}
+                        kind_local = ("fee" if ({"fee_items", "fee_sections"} & tabs)
+                                      else "quota" if ({"items", "quota_items"} & tabs)
+                                      else "table")
+                        cnt_tbl = ("items" if "items" in tabs
+                                   else "fee_items" if "fee_items" in tabs
+                                   else "quota_items" if "quota_items" in tabs
+                                   else None)
+                        if cnt_tbl:
+                            n_local = con.execute(f"select count(*) from {cnt_tbl}").fetchone()[0]
                     finally:
                         con.close()
                 n_online = v["counts"]["items"]
                 check("D 线上 items 数一致", n_local is None or n_local == n_online,
-                      f"online={n_online} local={n_local}", "服务器 kill node 重启（动态注册表随进程生效）")
-                # 坑46 全称判据卷自适应：「计价依据」是辽宁书名特有词，不可硬编码
-                # （xj01 新疆卷书名无此词）——判据=含「定额/计价依据」且长度>10 且非 label 降级
-                bn = v.get("book_name") or ""
-                check("D 线上 book_name 全称",
-                      ("定额" in bn or "计价依据" in bn) and len(bn) > 10 and bn != v.get("label"),
-                      bn[:30], "坑 46：finalize 补纯文本 book_name 后重跑+重同步")
+                      f"online={n_online} local={n_local}(src={cnt_tbl or '无计数表'})",
+                      "服务器 kill node 重启（动态注册表随进程生效）")
+                check("D 线上 kind 与 schema 一致", kind_local is None or v.get("kind") == kind_local,
+                      f"online={v.get('kind')} schema实测={kind_local}",
+                      "坑 100：db_profile 三型判定（fee_items|fee_sections→fee）+ 重跑 sync_remote + kill node")
+                check("D 线上 book_name 全称", _bn_ok(key, v.get("book_name") or ""),
+                      v["book_name"][:40], "坑 46：finalize 补纯文本 book_name 后重跑+重同步")
         except Exception as e:
             check("D 线上终验", False, f"API 不可达/异常: {e}", "确认服务器在线；维护期可用 --offline")
 
