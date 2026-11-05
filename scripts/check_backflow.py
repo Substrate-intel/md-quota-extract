@@ -34,7 +34,7 @@ SKILL = os.path.expanduser(r"~/.workbuddy/skills/md-quota-extract")
 SYNC = os.path.join(SP, "sync_remote.py")
 REPO = os.path.join(SP, ".volumes_repo")
 REPO_DATA = os.path.join(SP, ".volumes_data_repo")
-ONLINE = "http://134.175.50.9:3001/api/quota/volumes"
+ONLINE = "http://150.158.164.251:3001/api/quota/volumes"  # 2026-11-05 换新机 lhins-f2a521es（Ubuntu/上海）
 
 # 卷目录名注册表口径与 sync_remote.py 一致（quota-extract-<key>）
 RESULTS = []

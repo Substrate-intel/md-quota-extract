@@ -520,3 +520,9 @@
 - **保真手段替代**：无文本层字节锚时，以 源 PDF sha12 + 转写锚串 + 双遍分歧清零 为保真三元组；gate 门5 改验锚串与 evidence 留痕。
 - **同族预警**：与坑 88（OCR twin 三层文字层择定）同族——**源形态四型（文本层/矢量网格/OCR twin/纯图片）先判型再选链**；纯图片型若页数大须先评估 OCR 引擎接入而非人工转写。
 - **语义分析建表范式（用户诉求「每条定额解释语义分析建表入计价依据库」）**：`fee_semantics` 表（sem_id/item_id 指向 fee_items 或 fee_tables/topic/effect_type/linked_volume/linked_chapter/linked_codes/apply_status/content），勘误表条目也建语义行（apply_status 与跨卷 erratas 状态闭环，gate 门2/门3 断言）；apply_errata 侧两新 op——`item_labor_qty`（人工数量修正，xj01 空白补齐）与 `cons_name_multi`（一条勘误多码材料名替换+去空格规整匹配，库内排版空格差异容忍）。
+
+### 坑 110｜源形态第五型：网页 HTML + xlsx 双源直读链（xj20 建筑垃圾计价清单增补，2026-11-05 实证）
+- **判型**：官方计价文件分发布形态五型——文本层 PDF / 矢量网格 PDF / OCR twin / 纯图片 PDF / **网页 HTML+附件 xlsx**。第五型走直读链：正文逐字取自页面 HTML（正则剥标签+unescape，全角引号等排版字符保留），表格按 xlsx 单元格级 openpyxl data_only 实读。
+- **xlsx 逻辑行还原双规则**：多值单元格（1.m3/2.t、装卸/外运）分布在**未合并的相邻两物理行**（如 F6/F7、D10/D11），单值列靠**合并单元格跨两行**（A6:A7 等）——取值须「下格有值→\n 拼接；合并（下格空）→取上格」双规则，转写定稿用 ⏎ 标记原始换行、parse 转真 \n 入库。
+- **双源闭环三断言**（替代无文字层 PDF 的字节锚）：①条款正文逐条⊆页面提取文本；②xlsx 程序化实读逻辑表==手工转写定稿（逐格）；③正文列举名与 xlsx 表列跨源一致。gate 门4 锚 xlsx sha12+页面快照 sha12 双锚。
+- **坑族关联**：卷级注（fee_notes section_id NULL）对账放行；附件无页码体系→print_page 恒空、page_ok 取挂接语义、单元格坐标为唯一锚；服务器换机后 check_backflow ONLINE 端点硬编码同步更新（坑96 同族回收）。
