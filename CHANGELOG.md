@@ -2,6 +2,13 @@
 
 格式：`- 版本 | 日期 | 来源 | 变更摘要`；来源=贡献者标识/卷名；合并须经作者过审（iteration-protocol.md 第四节）。
 
+## v1.14.0 · 2026-11-07 · 爪哥（作者）· xj22 装配式建筑工程消耗量定额 + 第六型源形态（FzBookMaker 无 ToUnicode charmap 反解链，坑117）
+
+- **xj22 新疆维吾尔自治区装配式建筑工程消耗量定额（试行）**：新疆住建厅 2023-01-31 发布通知附件 PDF（96 页 / sha12 `deb3291d4070`），2023-03-01 施行；**源形态第六型（全新）**——中文用 FZ* 方正字体可读（27372 字符），数字/符号/西文单位字母用 **FzBookMaker 子集字体无 ToUnicode 乱码**（25094 字符），文本层/矢量/OCR twin/纯图片/网页双源五型之外。5 章 14 节 / 264 子目 / 2688 消耗量 / 87 张定额表；quota 九表 + 站点兼容三表（无 fee_standard）。十门 10/10 + smoke 24/24 + 全链重放字节级一致；疑点 0 条（charmap 反解全归位）。
+- **坑117（第六型源形态 charmap 反解链，全新专项）**：①**charmap 反解**——OCR（rapidocr 独立视觉转写）对齐反解 FzBookMaker glyph→真实字符，`build_charmap` 双通道对齐自动固化 57 glyph + 语义补丁，覆盖 6 字体子集（`0DlFont` 中文标点：，、。（）； / `3DlFont` 数字 0-9·小数点·×·-·字母 / `1DlFont`/`2DlFont` 顿号·括号 / `4DlFont` Φ / `5DlFont` ≤）；charmap stats paired 3613 / resolved 57 / ambiguous 14 / fonts 6，pdf 锚与 source_sha12 一致。②**类别分块**——三类别字（人工/材料/机械）竖排分散在各自块内部（非块顶锚点），用 `full` 全宽横线切块 + 块内 c0 列首字映射。③**分层表头**——项目名多行分层（主名称行 + 规格行 + 合并单元格跨列），用竖线（`tab["v"]`）还原，68 残缺项目名→0 空。④**单位行识别**——preamble「计量单位：见表」时单位值在项目名区独立行；单位片段「10m」字符 x 间隔达 7pt → 切分阈值 4pt→8pt（26 missing→0）。⑤**preamble 顺序不固定**——「工作内容」「计量单位」分别扫描不依赖先后（修 5-11/5-12 计量单位在上的变体）。⑥**每子目一列版式**——与 xj21「每子目多列消耗」不同，门3 恒等式改「Σ每子目消耗行=2688 + 每子目恰 1 人工=264」；门4 P1 取证重定义=charmap 反解完整性（6 字体 resolved / 57 glyph / paired / pdf 锚）。
+- **上线（新机 lhins-f2a521es，Caddy :8089）**：`sync_remote.py` 双仓 git 直连推送（私有 34 db + 公开 106 文件），REGION_EXCLUDE 同步追加 `quota-extract-xj22`、VOLUME_META 注册 `(xj22, quota, …)`；`build_portal.py` VOLUMES 追加 + `XJ_NOTICE_PC` 发布依据（2023-01-31 通知，2023-03-01 施行，配套 2020 版费用定额）+ 刷新总入口；`xj_official_catalog.json` seq 22/23 → covered（covered 21→23）。服务器 `node quota-volumes-sync.js`（入库 3 / 跳过 28）+ `systemctl restart metal-backend.service`。逐端点全绿：volumes 31 卷（xj22 available/kind=quota/items=264/chapters=6/book_name 全称）、chapters 6、items 详情 1-1 人材机 1/7/1（=9 行，预制混凝土柱 unpriced=1）、chapter-rules 1-1=25、全局 search「实心柱」命中 xj22 1-1 10m3。**check_backflow ONLINE 端点更新为新机 `150.158.164.251:8089`（坑110-③ 同族回收）**。
+- 验证：xj22 check_backflow 12/12（A 层 CHANGELOG/tag v1.14.0 + B/C/D 全 PASS）；门控/冒烟/线上三层全绿。
+
 ## v1.13.0 · 2026-11-06 · 爪哥（作者）· xj21 排水设施养护及维修工程消耗量定额 + 矢量网格链跨卷复用（坑115）
 
 - **xj21 新疆维吾尔自治区排水设施养护及维修工程消耗量定额**：新疆住建厅 2025-06-19 发布通知附件 PDF（99 页 / 1,094,778 B / sha12 `5e5c16323e30`），2025-08-01 施行；**源形态第四型（官方干净文本层 + 矢量网格）复用 xj18 链，未走 OCR**。9 章 51 节 / 218 子目 / 2977 消耗量 / 79 张定额表 / 20 行附件费用标准；quota 九表 + 站点兼容三表 + 新增 `fee_standard`。十门 10/10（P1 `get_text("words")` 独立数值取证 **2977/2977**）+ smoke 26/26 + 全链重放字节级一致；3 条疑点留痕零静默修正。
