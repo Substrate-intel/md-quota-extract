@@ -1,7 +1,7 @@
 ---
 name: md-quota-extract
 description: 官方定额 PDF → Markdown → 结构化定额库（SQLite + 前端成果库 + 九门门控）的确定性提取管线。适用于只有官方 PDF（含水印扫描版）、拿不到 Word/docx 源的定额、消耗量标准、计价规范类文档。基准卷：辽宁2024《绿色建筑工程定额》269 页全链验证（487 子目/九门全绿/字节级复现/P1 官方原版取证 487/487）。触发词：PDF 转 markdown、md 定额提取、PDF→md→定额库、无 docx 源定额结构化、绿色建筑式提取、md 源管线。
-version: 1.19.1
+version: 1.20.0
 ---
 
 # md-quota-extract：定额 PDF → md → 结构化库 确定性提取管线
@@ -77,6 +77,19 @@ nowm.pdf ──(0) convert_pdf_to_md ──> source.md [页锚 Pn]
 
 预检 → 换参+守卫 → 转换层标定（字号/水印/页码三件）→ 阶段 1-2 自测（单章先验证再放大）→
 阶段 5-10 → 门控闭环 → 交付报告 → 按 `references/iteration-protocol.md` 强制回写本 skill。
+
+## 动态调整叠加层（广东 2018 专项，48 期）
+
+定额 PDF 结构化完成后还有第二战场：官方逐期发布的「定额动态调整」。判据与纪律见
+`references/pitfalls.md` 坑 137：
+
+1. **编码在主库 `items` 存在与否 = 真新增 / 调整落地值的唯一判据**，不靠名称猜。
+2. **守恒门禁**（明细金额合计 = 原书人材机三费，容差 1.5 元）是允许写明细的唯一通行证；
+   过不了只入五要素并留痕，绝不让平台按错明细算综合单价。
+3. **BASE 原值永不改**：真新增 = 补充子目（「补」前缀 + tags + note）；落地值 = 叠加层
+   UPDATE；台班 = BASE + DYNAMIC 双行，按「价随定额走」分专业库承载。
+4. 平台明细权威在人材机三表，`resource_composition` 只是投影：UPDATE 必须走
+   `set_item_composition()`；INSERT 只插 items，靠触发器分发（双写翻倍）。
 
 ## 成果回流与悬赏协同（metal 站接单场景）
 
